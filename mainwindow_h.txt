@@ -1,0 +1,179 @@
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
+
+#include <iostream>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/core/core.hpp>
+#include "eyelabel.h"
+#include "loceyeinfo.h"
+//#include "algorithmshow.h"
+#include "trackerutils.h"
+
+#include <io.h>
+#include <vector>
+#include <string>
+
+#include <QMainWindow>
+#include <QString>
+#include "eyemotionai.h"
+
+#include <QMouseEvent>
+#include <QFile>
+#include <QKeyEvent>
+#include <QPainter>
+#include <QPoint>
+#include <QTimer>
+#include <QMessageBox>
+#include <QCloseEvent>
+
+#include <QDebug>
+
+using namespace std;
+using namespace cv;
+
+namespace Ui {
+class MainWindow;
+}
+
+class MainWindow : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    explicit MainWindow(QWidget *parent = 0);
+    ~MainWindow();
+    void showINFO(const QString &s);
+protected:
+    void mouseMoveEvent(QMouseEvent *event);
+    void mousePressEvent(QMouseEvent *event);
+    void mouseReleaseEvent(QMouseEvent *event);
+    void keyPressEvent(QKeyEvent *event);
+    void paintEvent(QPaintEvent *event);
+    void closeEvent(QCloseEvent *event);
+
+private slots:
+//************************************************************************************************************************************
+    void on_pushButton_imagePath_clicked();
+
+    void on_start_clicked();
+
+    void on_saveAllInfo_clicked();
+
+    void on_preImage_clicked();
+
+    void on_nextImage_clicked();
+
+    void on_eyeLeft_clicked();
+
+    void on_eyeRight_clicked();
+
+    void on_pupilCenterCalc_clicked();
+
+    void on_lightCenterCalc_clicked();
+
+    void on_irisCenterCalc_clicked();
+
+    void on_boxMethod_clicked();
+
+    void on_circleMethod_clicked();
+
+    void on_elipseMethod_clicked();
+
+    void on_currentSaveInfo_clicked();
+
+    void on_jumpPic_returnPressed();
+
+    void on_boxZero_clicked();
+
+    void on_circleZero_clicked();
+
+    void on_elipseZero_clicked();
+
+private:
+    //*************************************************************************************************************************
+    Ui::MainWindow *ui;
+    vector<string> files;
+    vector<string> picName;
+    QTimer *timer;
+    string path;
+
+    //两种方法
+    ofstream out;  //写入数据
+    //QFile file;
+    //QTextStream out;
+
+    int image_counter=0;
+    int totalImages=0;
+    QVector<QRgb>  colorTable;
+    Mat imageData;  //原图+瞳孔中心
+    Mat originalImage; //原图
+
+    Mat localImage;
+    Mat localImage2;
+
+    eyeMotionAI yu;
+
+    int saveProgress = 0;
+    int maxProgress = 0;
+    //每张图片左右眼的临时数据
+    vector<string> left_right_info;
+
+    //保存信息
+    vector<string> infos;  //以字符串的形式保存所有信息
+    vector<Point2f> lightCenters;  //四个光斑中心
+    vector<Point2f> pupilCenters;  //两个瞳孔中心
+
+    RotatedRect e;//RotatedRect:该类表示平面上的旋转矩形，有三个属性（矩形中心点、边长（长和宽）、旋转角度）
+
+    Point2f LpupilCenter;
+    Point2f LlightCenter1;
+    Point2f LlightCenter2;
+
+    Point2f RpupilCenter;
+    Point2f RlightCenter1;
+    Point2f RlightCenter2;
+
+    //**************************************图片缩放尺寸
+    int imgScale = 1;
+    int mulriple = 1; //放大倍数
+
+    //Point2f pupilCenter;  //瞳孔中心
+    Point2f irisCenter;   //虹膜中心
+    float irisWidth;      //虹膜宽
+    float irisHeight;     //虹膜高
+
+    //截取眼图时的坐标(左上角，右下角，实时)
+    QPoint leftUP;
+    QPoint rightDown;
+    QPoint real_Time_pos;
+
+    QPoint irisLeftUp;
+    //QPoint irisRightDown;
+
+    locEyeInfo *eyeinfo = nullptr;
+    //algorithmShow *algorithshow = nullptr;
+    //跟踪器
+    TrackerUtils *track;
+    Rect rect_left,rect_right;
+
+    eyeLabel *elipseLabel=nullptr;
+
+//    bool is_startWorkFirst=true;
+
+    //三种拟合方法：(1)瞳孔中心(椭圆拟合)(2)光斑中心(圆拟合)(3)虹膜中心/长/宽(方框拟合)
+    bool is_box_method = false;
+    bool is_circle_method = false;
+    bool is_elipse_method = false;
+
+    //区分左右眼
+    bool is_eyeLeft = false;
+    bool is_eyeRight = false;
+
+    //bool is_draw = true;
+
+    int lightCenterCount = 0;
+
+};
+
+#endif // MAINWINDOW_H

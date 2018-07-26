@@ -1,0 +1,64 @@
+#ifndef TRACKERUTILS_H
+#define TRACKERUTILS_H
+
+#include<opencv2/opencv.hpp>
+#include<opencv2/tracking.hpp>
+#include <QDebug>
+
+using namespace cv;
+
+class TrackerUtils
+{
+
+public:
+    cv::Ptr<cv::TrackerKCF> tracker_left;
+    Rect2d rect_left;
+
+    cv::Ptr<cv::TrackerKCF> tracker_right;
+    Rect2d rect_right;
+
+    int reInitCount_left = 0;
+    int reInitCount_right = 0;
+public:
+    inline void initTracker_left(int x,int y,int w,int h,Mat& img){
+        if( tracker_left->init(img,Rect2d((double)x,(double)y,(double)w,(double)h))){
+            qDebug()<<"KCF tracker init success";
+            ++reInitCount_left;
+        }else{
+            qDebug()<<"false";
+        }
+    }
+
+    inline bool track_left(Mat& img){
+        return tracker_left->update(img,rect_left);
+    }
+
+    inline void initTracker_right(int x,int y,int w,int h,Mat& img){
+        if( tracker_right->init(img,Rect2d((double)x,(double)y,(double)w,(double)h))){
+            qDebug()<<"KCF tracker init success";
+            ++reInitCount_right;
+        }else{
+            qDebug()<<"false";
+        }
+    }
+
+    inline bool track_right(Mat& img){
+        return tracker_right->update(img,rect_right);
+    }
+
+public:
+    TrackerUtils(){
+        tracker_left = cv::TrackerKCF::create();
+        tracker_right = cv::TrackerKCF::create();
+    }
+    ~TrackerUtils(){
+        if(tracker_left!=nullptr){
+            delete tracker_left;
+        }
+        if(tracker_right!=nullptr){
+            delete tracker_right;
+        }
+    }
+};
+
+#endif // TRACKERUTILS_H

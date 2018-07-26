@@ -1,0 +1,1467 @@
+#include "eyemotionai.h"
+
+double total_time=0;
+int couter=0;
+
+
+eyeMotionAI::eyeMotionAI()
+{
+     net = readNetFromTensorflow(modelFile);
+     cv::HOGDescriptor tmp(cv::Size(22,22),cv::Size(22,22),cv::Size(2,2),cv::Size(11,11),9);
+     hog=tmp;
+     svm= cv::ml::SVM::load("SVM_HOG14.xml");
+
+
+}
+eyeMotionAI::~eyeMotionAI()
+{
+
+
+}
+vector<Point2f> eyeMotionAI::findRoughBorderWithTF_recent(Mat &srcw, Mat &srcb, char *savepath)
+{
+    GaussianBlur(srcb, srcb, Size(3,3),0);
+    //GaussianBlur(srcw, srcw, Size(3,3),0);
+    //imshow("srcb", srcb);
+    //resize(srcb, srcb, Size(320, 180), INTER_LINEAR);
+
+    //Mat W, B, DIFF, D2, T, W1, B1, B2, B3;
+    Mat   B1, B2;
+
+
+    //imshow("diff", diff);
+    //cout << diff << endl;
+
+    //blur(srcb, srcb, Size(7, 7));
+    //imshow("srcb",srcb);
+
+    //srcb.copyTo(B);
+    srcb.copyTo(B1);
+    srcb.copyTo(B2);
+    //srcw.copyTo(W1);
+    //imshow("w1", W1);
+    //clock_t start, finish;
+    //start = clock();
+
+    //resize(B, B, Size(640, 360), INTER_LINEAR);
+    //imshow("reducer B", B);
+
+
+
+
+    resize(B1, B1, Size(B1.cols/2,	B1.rows/2), INTER_LINEAR);
+    resize(B2, B2, Size(B2.cols / 2, B2.rows / 2), INTER_LINEAR);
+    //B1 = B1*3;
+    /*Scalar avr = mean(template_eye);
+    cout << avr[0] << endl;
+    MatND tmphist,srchist;
+
+    int channel[1] = { 0 };
+    int histsize[1] = { 64 };
+
+    float d[2] = { 0,255 };
+    const float* ranges[1] = { d };
+    calcHist(&template_eye, 1, channel, Mat(), tmphist, 1, histsize, ranges);
+    normalize(tmphist, tmphist,0,1,NORM_MINMAX);
+    cout << tmphist << endl;
+    float* data = tmphist.ptr<float>(0);
+    for (int k = 0; k < tmphist.rows; k++)
+        cout<<data[k]<<"!!!!!!";
+
+    imshow("eye1", template_eye);
+
+    blur(template_eye, template_eye, Size(3, 3));
+    threshold(template_eye, template_eye, 40, 255, THRESH_BINARY_INV);
+    threshold(B1, B1, 90, 255, THRESH_BINARY_INV);
+    imshow("eye",template_eye);
+    imshow("reducer B", B1);*/
+
+    //waitKey();
+    //Mat re(B1.rows - template_eye.rows + 1, B1.cols - template_eye.cols + 1, CV_32FC1);
+    //imshow(" B1", B1);
+    vector<Point2f> allroi=yu_match(B1,srcw, 50,50,0);
+    //imshow("reducer B1", B1);
+    //matchTemplate(B1, template_eye, re,CV_TM_CCOEFF);
+    /*normalize(re, re, 0, 1, NORM_MINMAX, -1, Mat());
+    cout << re.size() << endl;
+    for (int i = 0; i < re.rows; i++) {
+        float* data = re.ptr<float>(i);
+        for (int j = 0; j < re.cols; j++)
+            if (data[j] > 0.8)
+                cout << "i " << i << "j  " << j << endl;
+    }
+
+    waitKey();*/
+
+
+
+    //Mat B_copy;
+    //B.copyTo(B_copy);
+    ////B = diff;
+    ////Mat element1 = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
+    ////morphologyEx(B, B, MORPH_ERODE, element1);
+    //B1 = 255 - B1;
+    //vector<KeyPoint> keypoints;
+    //SimpleBlobDetector::Params params;
+    //
+    //params.thresholdStep = 2;
+    //params.minThreshold = 200;
+    //params.maxThreshold = 240;
+    //params.filterByArea = true;
+    //params.minArea = 20;
+    //params.maxArea = 1000;
+    //params.filterByCircularity = 1;
+    //params.minCircularity = 0.0;
+    //params.filterByInertia = 1;
+    //params.minInertiaRatio = 0.0;
+    //params.filterByConvexity = 0;
+    //Ptr<SimpleBlobDetector> detector = SimpleBlobDetector::create(params);
+    //
+    //detector->detect(B1, keypoints);
+    //Mat blob_show(B1.size(),CV_8UC1);
+    //for (auto c : keypoints)
+    //	cout << "keypoint" << c.pt << endl;
+    //drawKeypoints(B1, keypoints,B1, Scalar(0, 0, 255));
+
+    //imshow("bb",B1);
+    ////imshow("blob",blob_show);
+    ////Mat outIMG(B1.size(),CV_32S);
+    ////Laplacian(B1, outIMG,0,5);
+    ///*for (int i = 0; i < B1.rows; i++)
+    //{
+    //	uchar* data = outIMG.ptr<uchar>(i);
+    //	for (int j = 0; j < outIMG.cols; j++)
+    //		if (data[j] > 255)
+    //			data[j] = 255;
+    //}*/
+    ////cout << outIMG << endl;
+    ////imshow("B1", outIMG);
+    //for(int i = 0; i < B1.rows; i++)
+    //{
+    //	//int sum = 0;
+    //	uchar* data = B1.ptr<uchar>(i);
+    //	for (int j = 0; j < B1.cols; j++)
+    //		//sum += data[j];
+    //		matrix[i][j] = data[j];
+
+    //}
+
+    //for (int i = 0; i < B1.rows; i++)
+    //{
+    //	int sum = 0;
+    //
+    //	for (int j = 0; j < B1.cols; j++)
+    //		//sum += data[j];
+    //		//if(matrix[i][j]<40)
+    //		sum+=matrix[i][j];
+    //	row_count[i] = sum;
+
+    //}
+    //for (int j = 0; j < B1.cols; j++)
+    //{
+    //	int sum = 0;
+
+    //	for (int i = 0; i < B1.rows; i++)
+    //		//sum += data[j];
+    //		//if (matrix[i][j]<40)
+    //		sum += matrix[i][j];
+    //	col_count[j] = sum;
+
+    //}
+    //
+    //ofstream out("row.txt");
+    //ofstream out2("col.txt");
+    //for(auto c: row_count)
+    //out << c << endl;
+
+    //for (auto c : col_count)
+    //	out2 << c << endl;
+
+    //out.close();
+    //out2.close();
+
+
+    /*imshow("mask ", B);
+    threshold(B,B,40,255,THRESH_BINARY_INV);
+    threshold(W1, W1, 40, 255, THRESH_BINARY_INV);*/
+
+
+    //imshow("B after inverse", B);
+
+    //imshow("b reduce inverse", B);
+
+    //medianBlur(W1, W1, 3);
+    //B = B - W1;
+    //imshow("diff", B);
+
+
+    //medianBlur(W1, W1, 3);
+    //imshow("W reduce inverse", W1);
+    //vector<vector<cv::Point>> Contours;
+    //vector<Vec4i> hierachy;
+    //findContours(B, Contours, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+
+    //vector<vector<cv::Point>> ::iterator it = Contours.begin();
+    ////cout << "Contours size" << Contours.size() << endl;
+
+    //vector<vector<Point>> Contours_tmp;
+    //for (int i = 0; i<Contours.size(); i++)
+    //{
+    //	double area = contourArea(Contours[i]);
+    //	//cout << area << endl;
+    //	if (area > 50 && area < 2000)
+    //	{
+    //		Contours_tmp.push_back(Contours[i]);
+    //	}
+
+    //	/*if (area <50|| area>500)
+    //	{
+    //	it = Contours.erase(it);
+    //	}
+    //	else
+    //	{
+    //	++it;
+    //	}*/
+    //}
+    ////cout << endl;
+
+    ////cout << "Contours classify before" << Contours_tmp.size() << endl;
+    ////imshow("classify before", B);
+    ////???????START
+    //vector<vector<Point>> ::iterator it1 = Contours_tmp.begin();
+    //for (; it1 != Contours_tmp.end();)
+    //{
+    //	double hu[7] = { 0 };
+    //	Moments mon = moments(*it1, true);
+    //	HuMoments(mon, hu);
+
+    //	double d = -0.2113* hu[0] - 0.073499*hu[1] - 0.077045*hu[2] - 0.01648*hu[3] + 0.0665155 - 0.015+1;
+
+    //	if (d < 0)
+    //	{
+    //		it1 = Contours_tmp.erase(it1);
+    //	}
+    //	else
+    //	{
+    //		++it1;
+    //	}
+    //}
+
+    ////cout << "Contours classify after" << Contours_tmp.size() << endl;
+    //Mat tmp(B.size(), CV_8UC1);
+    //drawContours(tmp, Contours_tmp, -1, Scalar(255), CV_FILLED, 8);
+    ////resize(tmp,tmp,Size(540,860));
+    //namedWindow("classify after", WINDOW_AUTOSIZE);
+    //imshow("classify after tmp", tmp);
+    //clock_t finish1 = clock();
+    ////cout << " cost time before" << double(finish1 - start) / CLOCKS_PER_SEC << endl;
+
+    ////B.copyTo(lastshow);
+    //it = Contours_tmp.begin();
+
+    vector<Point2f> save;
+    vector<Point2f> save2;
+
+    vector<Point2f> cnn_save;
+
+    //cout << allroi << endl;
+    //cout << "B2 SIZE "<<B2.size() << endl;
+
+    //waitKey();
+    for(int i=0;i<allroi.size();i++)
+    {
+        //RotatedRect ellipsemege = fitEllipse(*it);
+        // << "roi center "<<allroi[i] << endl;
+        if (allroi[i].y >30 && allroi[i].y < 330 && allroi[i].x < 610 && allroi[i].x>30)//
+        {
+
+            vector<Mat> vec;
+            Mat roi_copy(B2, Rect(abs(allroi[i].x - 20), abs(allroi[i].y - 20), 40, 40));
+            Mat roi_copy3(B2, Rect(abs(allroi[i].x - 15), abs(allroi[i].y - 15), 30, 30));
+            Mat roi_copy2(B2, Rect(abs(allroi[i].x - 30), abs(allroi[i].y - 30), 60, 60));
+
+            //Mat roi_copy4(B2, Rect(abs(allroi[i].x - 20), abs(allroi[i].y - 20), 40, 40));
+
+            vec.push_back(roi_copy);
+            vec.push_back(roi_copy3);
+            vec.push_back(roi_copy2);
+            //Point2f loc_center;
+            //loc_center.x= int(allroi[i].x);
+            //loc_center.y = int(allroi[i].y);
+            //Mat lbp_face;//= Mat::zeros(color_face.size(),color_face.type());
+            //imshow("LBP roi_copy4", roi_copy4);
+            //OLBP_<uchar>(roi_copy4, lbp_face);
+            //cout << "lbp over" << endl;
+
+            //???LBP?????????
+            //namedWindow("LBP Image1", 1);
+            //imshow("LBP Image1", lbp_face);
+            //waitKey();
+
+            //cout << "allroi before"<<allroi[i]*2 << endl;
+            Mat	roi2, roi3,roi4;
+            for (auto c : vec)
+            {
+                //clock_t start = clock();
+                c.copyTo(roi2);
+                c.copyTo(roi3);
+                c.copyTo(roi4);
+                //resize(roi2, roi2, Size(40, 40));
+
+
+                //Mat p ,p2;
+                //roi2.copyTo(p);
+                //roi2.copyTo(p2);
+
+                //imshow("template", template_eye);
+                //waitKey();
+                /*Mat re2(p2.rows - template_eye.rows + 1, p2.cols - template_eye.cols + 1, CV_32FC1);
+                matchTemplate(p2, template_eye, re2, CV_TM_CCOEFF_NORMED);
+                normalize(re2, re2, 0, 1, NORM_MINMAX, -1, Mat());
+                cout << re2.size() << endl;
+                for (int i = 0; i < re2.rows; i++) {
+                float* data = re2.ptr<float>(i);
+                for (int j = 0; j < re2.cols; j++)
+                if (data[j] <0.2)
+                cout << "i " << i << "j  " << j << "value "<<data[j]<<endl;
+                }
+
+                waitKey();*/
+                //equalizeHist(p, p);
+                //int flag = 0;
+                //Sobel(p, p, CV_16SC1, 1, 1);
+
+                //equalizeHist(p, p);
+                //imshow("p before", p);
+                //Scalar mean1;
+                //Scalar stddev1;
+                //meanStdDev(roi2, mean1, stddev1);
+                //cout << "stddev1  " << stddev1 << endl;
+                //cout << "mean1" << mean1 << endl;
+                //if (mean1[0] < 70 && stddev1[0]>10) {
+
+                //	Mat tmp_grad, grad;
+                //	p.copyTo(tmp_grad);
+                //	Mat grad_x, grad_y;
+                //	Mat abs_grad_x, abs_grad_y;
+                //	GaussianBlur(tmp_grad, tmp_grad, Size(3, 3), 0, 0, BORDER_DEFAULT);
+                //	Sobel(tmp_grad, grad_x, CV_16S, 1, 0, 3, 1, 0, BORDER_DEFAULT);
+                //	Sobel(tmp_grad, grad_y, CV_16S, 0, 1, 3, 1, 0, BORDER_DEFAULT);
+                //	convertScaleAbs(grad_x, abs_grad_x);
+                //	convertScaleAbs(grad_y, abs_grad_y);
+                //	addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
+
+                //	p = grad;
+                //	resize(p, p, Size(50, 50));
+
+                //	vector<Vec3f> circles;
+                //	HoughCircles(p, circles, HOUGH_GRADIENT, 1, 10, 50, 15, 5, 30);
+                //	cout << "circles nums" << circles.size() << endl;
+                //	for (int i = 0; i < circles.size(); i++)
+                //	{
+                //		Vec3i c = circles[i];
+                //		double distance = sqrt((p.rows/2 - c[0])*(p.rows / 2 - c[0]) + (p.cols / 2 - c[1])*(p.cols / 2 - c[1]));
+                //		cout << "distance" << distance << endl;
+                //		if (distance < 8&&c[2]<15) {
+                //			int sum = 0;
+                //			int var = 0;
+                //			int count = 0;
+                //			for (int i = 0; i < p2.rows; i++) {
+                //				uchar* data = p2.ptr<uchar>(i);
+                //				for (int j = 0; j < p2.cols; j++) {
+                //					double tmp = sqrt((i - c[0])*(i - c[0]) + (j - c[1])*(j - c[1]));
+                //					if (tmp < c[2]) {
+                //						sum += data[j];
+                //						count++;
+                //					}
+                //				}
+                //			}
+                //			cout << "!!!!!!!!!!!!!avr  " << sum / count << endl;
+
+                //			int avr = sum / count;
+                //			for (int i = 0; i < p2.rows; i++) {
+                //				uchar* data = p2.ptr<uchar>(i);
+                //				for (int j = 0; j < p2.cols; j++) {
+                //					double tmp = sqrt((i - c[0])*(i - c[0]) + (j - c[1])*(j - c[1]));
+                //					if (tmp < c[2] && data[j]<90) {
+                //						var += (data[j] - avr)*(data[j] - avr);
+
+                //					}
+                //				}
+                //			}
+                //			cout << "!!!!!!!!!!!!!var  " << var / count << endl;
+                //			//==================================================================
+                //			int sum2 = 0;
+                //			int var2 = 0;
+                //			int count2 = 0;
+                //			for (int i = 0; i < p2.rows; i++) {
+                //				uchar* data = p2.ptr<uchar>(i);
+                //				for (int j = 0; j < p2.cols; j++) {
+                //					double tmp = sqrt((i - c[0])*(i - c[0]) + (j - c[1])*(j - c[1]));
+                //					if (tmp >c[2] && tmp<c[2] * 2) {
+                //						sum2 += data[j];
+                //						count2++;
+                //					}
+                //				}
+                //			}
+                //			cout << "!!!!!!!!!!!!!avr2  " << sum2 / count2 << endl;
+
+                //			int avr2 = sum2 / count2;
+                //			for (int i = 0; i < p2.rows; i++) {
+                //				uchar* data = p2.ptr<uchar>(i);
+                //				for (int j = 0; j < p2.cols; j++) {
+                //					double tmp = sqrt((i - c[0])*(i - c[0]) + (j - c[1])*(j - c[1]));
+                //					if (i>c[0] && tmp >c[2] && tmp<c[2] * 2 && data[j]<120) {
+                //						var2 += (data[j] - avr2)*(data[j] - avr2);
+
+                //					}
+                //				}
+                //			}
+                //			cout << "!!!!!!!!!!!!!var2  " << var2 / count2 << endl;
+
+                //			circle(p, Point(c[0], c[1]), c[2], Scalar(150, 150, 150), 1, LINE_AA);
+                //			circle(p, Point(c[0], c[1]), c[2] * 2, Scalar(150, 150, 150), 1, LINE_AA);
+                //			if (avr<40&&var/count<120&&avr2>avr&&avr2<80&&var2/ count2<120) {
+                //				cout << "its true" << endl;
+
+                //				if (find(save.begin(), save.end(), loc_center * 2) == save.end())
+                //				{
+                //					//cout << "after allroi" << loc_center << endl;
+                //					save.push_back(loc_center * 2);
+                //				}
+                //			}
+                //		}
+                //		}
+                //
+
+                //}
+
+                //imshow("P", p);
+
+                //waitKey();
+                //for (int k = 20; k < 60; k=k+2) {
+
+                //	//cout << allroi[i] * 2 << endl;
+                //	Mat tmp;
+                //	roi2.copyTo(tmp);
+                //	threshold(tmp, tmp, k,255, THRESH_BINARY_INV);
+                //	medianBlur(tmp,tmp,3);
+                //	vector<vector<cv::Point>> Contours, Contours_tmp;
+                //	vector<Vec4i> hierachy;
+                //	findContours(tmp, Contours, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+
+                //	for (int j = 0; j<Contours.size(); j++)
+                //	{
+                //		double area = contourArea(Contours[j]);
+                //		cout << "now area" << area << endl;
+                //		if (area >40 && area < 1500)
+                //		{
+                //			cout << "area correct" << endl;
+                //			RotatedRect ell = fitEllipse(Contours[j]);
+                //			ellipse(tmp, ell, Scalar(155, 0, 255),3);
+                //			cout << "ell size " << ell.size << endl;
+                //
+                //			double ratio = double(ell.size.height) / ell.size.width;
+                //			cout << "ratio " << ratio << endl;
+                //			if (ell.size.height<30 && ell.size.width<30 && 0.8 < ratio && ratio<1.3) {
+                //				cout << "first " << endl;
+                //				cout << ell.center << endl;
+                //				//HoughCircles();
+                //				allroi[i].x = int(allroi[i].x);
+                //				allroi[i].y = int(allroi[i].y);
+                //				float distance = sqrt((ell.center.x - 25)*(ell.center.x - 25) + (ell.center.y - 25)*(ell.center.y - 25));
+                //					if (distance < 5) {
+                //						cout << "second" << endl;
+                //						flag = 1;
+                //						cout << allroi[i]*2 << endl;
+                //						if (find(save.begin(), save.end(), allroi[i] * 2) == save.end())
+                //						{
+                //							save.push_back(allroi[i] * 2);
+                //							cout << "notice!!!!!!!!!!"  << endl;
+                //
+                //						}
+                //				}
+                //			}
+                //			//Contours_tmp.push_back(Contours[i]);
+                //		}
+                //	}
+                //
+                //	imshow("tmp", tmp);
+                //	//waitKey();
+                //}
+                //cout << "flag####################" << flag << endl;
+                //imshow("p", p);
+
+                resize(roi3, roi3, Size(30, 30));
+
+                //vector<Rect> eyeRect;
+                //eyeCascader.detectMultiScale(roi3, eyeRect, 1.1);
+                //cout << "eyeRect  " << eyeRect.size() << endl;
+                //resize(roi4, roi4, Size(14, 14));
+
+                /*Point2f center(roi4.rows / 2, roi4.cols / 2);
+                double angle = 90;
+                Size dst_sz(roi4.cols, roi4.rows);
+                Mat rot_mat = getRotationMatrix2D(center, angle, 1.0);
+
+                Mat rot_;
+                warpAffine(roi4, rot_, rot_mat, dst_sz);
+                imshow("rotated mat", rot_);*/
+
+                //imshow("roi3 before", roi3);
+
+                /*int arr[30][30] = { 0 };
+                for (int i = 0; i < roi3.rows; i++)
+                {
+                    uchar* data = roi3.ptr<uchar>(i);
+                    for (int j = 0; j < roi3.cols; j++)
+                        arr[i][j]= data[j];
+                }
+
+
+                int col_sum[30] = { 0 };
+                int row_sum[30] = { 0 };
+                for (int i = 0; i < 30; i++)
+                {
+                    for (int j = 0; j < 30; j++) {
+                        col_sum[i] += arr[i][j];
+                        row_sum[j] += arr[i][j];
+                    }
+
+                }
+                for (int i = 0; i < 30; i++)
+                    cout << row_sum[i] << " ,";
+                cout << endl;
+                cout << "-------------------------------------------------------------------------------" << endl;
+                for (int i = 0; i < 30; i++)
+                    cout << col_sum[i] << " ,";
+                cout << endl;
+                Scalar mean;
+                Scalar stddev;
+                meanStdDev(roi3,mean,stddev);
+                cout << "stddev  " << stddev << endl;*/
+                //equalizeHist(roi3, roi3);
+                //Rect tmp = Rect(0, 12, 30, 18);
+                //roi3 = roi3(tmp);
+
+                Scalar mean;
+                Scalar stddev;
+                meanStdDev(roi3, mean, stddev);
+                //cout << "stddev  " << stddev << endl;
+                //cout << "mean" << mean << endl;
+
+
+                if (stddev[0] > 10 && mean[0]<90 )
+                {
+
+                    //equalizeHist(roi4,roi4);
+
+                    //Rect rec4(0, 12, 30, 18);
+                    //roi4 = roi4(rec4);
+                    //imshow("roi4 !!!!!!!!!",roi4);
+
+
+                    //================================================
+                    //resize(roi4,roi4,Size(200,200));
+                    //Mat re2(roi4.rows - template_eye.rows + 1, roi4.cols - template_eye.cols + 1, CV_32FC1);
+
+                    //imshow("ROI4 80*80", roi4);
+
+                   // matchTemplate(roi4, template_eye, re2, CV_TM_CCOEFF_NORMED);
+                    //loat* cor_value = re2.ptr<float>(0);
+                    //cout <<"corralation value " << cor_value[0] << endl;
+                    //double ncc = NCC_compare(roi4, template_eye);
+                    //cout << "NCC " << ncc << endl;
+                    //normalize(re2, re2, 0, 1, NORM_MINMAX, -1, Mat());
+                    //cout << re2.size() << endl;
+                    //for (int i = 0; i < re2.rows; i++) {
+                    //	float* data = re2.ptr<float>(i);
+                    //	//cout << "dsad" << endl;
+                    //	for (int j = 0; j < re2.cols; j++)
+                    //		//if (data[j] > 0.0)
+                    //			cout << "i " << i << "j  " << j << "value " << data[j] << endl;
+                    //}
+                    //================================================
+                    Mat tmp_grad, grad;
+                    roi4.copyTo(tmp_grad);
+                    Mat grad_x, grad_y;
+                    Mat abs_grad_x, abs_grad_y;
+                    //GaussianBlur(tmp_grad, tmp_grad, Size(3, 3), 0, 0, BORDER_DEFAULT);
+                    Sobel(tmp_grad, grad_x, CV_16S, 1, 0, 3, 1, 0, BORDER_DEFAULT);
+                    Sobel(tmp_grad, grad_y, CV_16S, 0, 1, 3, 1, 0, BORDER_DEFAULT);
+                    convertScaleAbs(grad_x, abs_grad_x);
+                    convertScaleAbs(grad_y, abs_grad_y);
+                    addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
+                    //
+
+                    //Mat show;
+
+                    //resize(grad, show, Size(40, 40));
+                    //===============================================
+
+                    //Mat loc_area;
+                    //Rect tmp = Rect(10, 10, 10, 10);
+                    //loc_area = roi3(tmp);
+
+                    //Scalar mean_loc;
+                    //Scalar stddev_loc;
+                    //meanStdDev(show, mean_loc, stddev_loc);
+
+                    //cout << "loc mean " << mean_loc[0] << endl;
+                    //cout << "stddev_loc  " << stddev_loc[0] << endl;
+
+                    //imshow("grad_roi4 ", show);
+
+                    //============================================
+
+
+                    /*for (int i = 0; i < 20; i++)
+                    {
+                        uchar* data = roi4.ptr<uchar>(i);
+                        for (int j = 0; j < 20; j++)
+                            if (data[j] > 130)
+                                data[j] = 0;
+                    }*/
+
+                    //**********************************************************svm hog
+                    vector<float> re;
+                    resize(grad, grad, Size(22, 22));
+                    hog.compute(grad, re);
+                    Mat svmmat = Mat::zeros(1, re.size(), CV_32FC1);
+
+                    for (int i = 0; i < re.size(); i++) {
+                        svmmat.at<float>(0, i) = re[i];
+                    }
+                    //cout << svmmat << endl;
+                    int ret = svm->predict(svmmat);
+                    //cout << ret << endl;
+
+
+
+                    //equalizeHist(roi3, roi3);
+                    //resize(roi3, roi3, Size(30, 30));
+                    //imshow("roi3", roi3);
+                    /*double hu[7] = { 0 };
+                    Moments mon = moments(roi3, false);
+                    HuMoments(mon, hu);
+                    for (auto c : hu) {
+                        cout << "hu " << c << endl;
+                    }*/
+
+                    //*****************************************************cnn model
+//                    roi3.convertTo(roi3,CV_32FC1);
+//                    double avr = 0;
+//                    double sum = 0;
+//                    for (int i = 0; i < roi3.rows; i++)
+//                    {
+//                        float* data = roi3.ptr<float>(i);
+//                        for (int j = 0; j < roi3.cols; j++)
+//                            sum += data[j];
+//                    }
+
+//                    avr = sum / (roi3.rows*roi3.cols);
+//                    //cout << "avr  " << avr << endl;
+//                    roi3 -= avr;
+//                    //roi3.convertTo(roi3, CV_32FC1);
+//                    roi3 /= 255;
+//                    //cout << roi3 << endl;
+//                    Mat remat = classify(roi3);
+//                    //cout << remat << endl;
+//                    //clock_t finish2 = clock();
+//                    //cout << " cost time iterator" << double(finish2 - start) / CLOCKS_PER_SEC << endl;
+//                    float* data = remat.ptr<float>(0);
+
+                    //****************************************************************select process
+                    //if (data[1] >0.75)
+                    //if (data[1] >0.75 && ret>0)
+                    if ( ret>0)
+                    //if(cor_value[0]>0.3)
+                    //if(ncc>13)
+                    {
+                        //**********************************************************************second selection with light blobs
+//                        Mat my_roi;
+//                        Mat mark(srcb, Rect(abs(allroi[i].x*2 - 25), abs(allroi[i].y*2 - 10), 50, 40));
+//                        mark.copyTo(my_roi);
+//                        //imshow("my_roi before", my_roi);
+//                        threshold(my_roi, my_roi, 150,255, THRESH_BINARY);
+//                        //imshow("my_roi", my_roi);
+//                        vector<vector<cv::Point>> Contours, Contours_tmp;
+//                        vector<Vec4i> hierachy;
+//                        findContours(my_roi, Contours, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+//                        for (int i = 0; i<Contours.size(); i++)
+//                        {
+//                            double area = contourArea(Contours[i]);
+//                            //cout << "area"<<area << endl;
+//                            if (area > 0.5 && area < 70)
+//                            {
+//                                Contours_tmp.push_back(Contours[i]);
+//                            }
+//                        }
+//                        //cout << "blobs nums" << Contours_tmp.size() << endl;
+//                        if (Contours_tmp.size() >=0)
+
+                        {
+                            allroi[i].x = int(allroi[i].x);
+                            allroi[i].y = int(allroi[i].y);
+                            if (find(save.begin(), save.end(), allroi[i] * 2) == save.end())
+                            {
+                                save.push_back(allroi[i] * 2);
+                            }
+
+                        }
+
+                }
+//                    if (data[1] >0.75)
+//                    //if (data[1] >0.75 && ret>0)
+//                    //if ( ret>0)
+//                    //if(cor_value[0]>0.3)
+//                    //if(ncc>13)
+//                    {
+//                        //**********************************************************************second selection with light blobs
+////                        Mat my_roi;
+////                        Mat mark(srcb, Rect(abs(allroi[i].x*2 - 25), abs(allroi[i].y*2 - 10), 50, 40));
+////                        mark.copyTo(my_roi);
+////                        //imshow("my_roi before", my_roi);
+////                        threshold(my_roi, my_roi, 150,255, THRESH_BINARY);
+////                        //imshow("my_roi", my_roi);
+////                        vector<vector<cv::Point>> Contours, Contours_tmp;
+////                        vector<Vec4i> hierachy;
+////                        findContours(my_roi, Contours, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+////                        for (int i = 0; i<Contours.size(); i++)
+////                        {
+////                            double area = contourArea(Contours[i]);
+////                            //cout << "area"<<area << endl;
+////                            if (area > 0.5 && area < 70)
+////                            {
+////                                Contours_tmp.push_back(Contours[i]);
+////                            }
+////                        }
+////                        //cout << "blobs nums" << Contours_tmp.size() << endl;
+////                        if (Contours_tmp.size() >=0)
+
+//                        {
+//                            allroi[i].x = int(allroi[i].x);
+//                            allroi[i].y = int(allroi[i].y);
+//                            if (find(cnn_save.begin(), cnn_save.end(), allroi[i] * 2) == cnn_save.end())
+//                            {
+//                                cnn_save.push_back(allroi[i] * 2);
+//                            }
+
+//                        }
+
+//                }
+
+                   // waitKey(0);
+              }
+
+            //waitKey(0);
+            }
+            //cout << "save"<<save << endl;
+        }
+
+    }
+
+    //***********************************************************************************
+//    Mat show_save;
+//    srcb.copyTo(show_save);
+//    for (auto c : save) {
+//        RotatedRect tmp;
+//        tmp.center= c;
+//        Point top_left(c.x - 40, c.y - 40);
+//        Point bottom_right(c.x+40, c.y +40);
+//        //circle(src_b, c, 20, Scalar(255, 255, 255), 5, 1, 0); //draw
+
+//        rectangle(show_save, top_left, bottom_right, Scalar(255, 255, 255),3);
+//        //circle(imgSrcb, c, 20, Scalar(255, 0, 0), -1, 5, 0); //draw
+//   }
+//    resize(show_save,show_save,Size(640/3,360/3));
+//    imshow("svm + hog",show_save);
+
+//    Mat show_save2;
+//    srcb.copyTo(show_save2);
+//    for (auto c : cnn_save) {
+//        RotatedRect tmp;
+//        tmp.center= c;
+//        Point top_left(c.x - 40, c.y - 40);
+//        Point bottom_right(c.x+40, c.y +40);
+//        //circle(src_b, c, 20, Scalar(255, 255, 255), 5, 1, 0); //draw
+
+//        rectangle(show_save2, top_left, bottom_right, Scalar(255, 255, 255),3);
+//        //circle(imgSrcb, c, 20, Scalar(255, 0, 0), -1, 5, 0); //draw
+//   }
+//    resize(show_save2,show_save2,Size(640/3,360/3));
+//    imshow("cnn ",show_save2);
+    //*********************************************************************************** second choose
+    for(auto c :save){
+        vector<Mat> vec;
+        Mat roi_copy (B2, Rect(abs(c.x/2 - 20), abs(c.y/2 - 20), 40, 40));
+        Mat roi_copy3(B2, Rect(abs(c.x/2 - 15), abs(c.y/2 - 15), 30, 30));
+        Mat roi_copy2(B2, Rect(abs(c.x/2 - 30), abs(c.y/2 - 30), 60, 60));
+
+        //Mat roi_copy4(B2, Rect(abs(allroi[i].x - 20), abs(allroi[i].y - 20), 40, 40));
+
+        vec.push_back(roi_copy);
+        vec.push_back(roi_copy3);
+        vec.push_back(roi_copy2);
+        Mat	roi2, roi3,roi4;
+        for (auto c2 : vec)
+        {
+            c2.copyTo(roi3);
+            resize(roi3, roi3, Size(30, 30));
+            //*****************************************************cnn model
+            roi3.convertTo(roi3,CV_32FC1);
+            double avr = 0;
+            double sum = 0;
+            for (int i = 0; i < roi3.rows; i++)
+            {
+                float* data = roi3.ptr<float>(i);
+                for (int j = 0; j < roi3.cols; j++)
+                    sum += data[j];
+            }
+            avr = sum / (roi3.rows*roi3.cols);
+            roi3 -= avr;
+            Mat remat = classify(roi3);
+            float* data = remat.ptr<float>(0);
+            if (data[1] >0.75){
+                {
+                    if (find(save2.begin(), save2.end(), c) == save2.end())
+                    {
+                        save2.push_back(c);
+                    }
+
+                }
+
+            }
+
+        }
+    }
+    //clock_t finish3 = clock();
+    //cout << " total cost time after" << double(finish3 - start) / CLOCKS_PER_SEC << endl;
+
+    //imshow("last show", lastshow);
+    //imshow("bb", B_copy);
+
+    //imwrite(savepath, B_copy);
+    //cout << endl;
+
+    //waitKey(0);
+    return save2;
+}
+
+
+vector<Point2f> eyeMotionAI::yu_match(Mat &src,Mat &srw,int x_step,int y_step,int method)
+{
+
+
+
+    cv::TickMeter tm;
+    tm.start();
+
+    MatND tmphist,srchist;
+
+    int channel[1] = { 0 };
+    int histsize[1] = { 64 };
+
+    float d[2] = { 0,255 };
+    const float* ranges[1] = { d };
+    //calcHist(&tmp, 1, channel, Mat(), tmphist, 1, histsize, ranges);
+    //normalize(tmphist, tmphist,0,1,NORM_MINMAX);
+    //cout << tmphist << endl;
+    vector<Point2f> allroi;
+    for (int i = 0; i  < src.rows-x_step-1; i = i + x_step/2)//src.rows-tmp.rows-1
+    {
+        for (int j = 0; j < src.cols- y_step-1; j = j + y_step/2)
+        {
+            Mat t(src, Rect(j, i, y_step, x_step)), tmpsrc,tmplight;
+            t.copyTo(tmpsrc);
+            t.copyTo(tmplight);
+
+            //imshow("ad", tmpsrc);
+            calcHist(&tmpsrc, 1, channel, Mat(), srchist, 1, histsize, ranges);
+            normalize(srchist, srchist, 0, 1, NORM_MINMAX);
+            float* data = srchist.ptr<float>(0);
+            int thresh = 0;
+            for (int k = 0; k < srchist.rows; k++)
+                if (data[k] < 0.001)
+                    data[k] =0;
+
+            for (int k = 1; k < srchist.rows; k++) {
+                if (k >= 20) break;
+                if (data[k - 1] > data[k]) {
+                    thresh = k * 4;
+                    break;
+                }
+            }
+
+            //save
+        /*	ofstream out("Hist.txt");
+            for (int k = 0; k < srchist.rows; k++)
+            out << data[k]<< endl;
+            out.close();*/
+
+            //cout << srchist << endl;
+            //cout << "@@@" << thresh;
+            threshold(tmpsrc, tmpsrc, thresh, 255, THRESH_BINARY_INV);
+            medianBlur(tmpsrc, tmpsrc, 3);
+
+            vector<vector<cv::Point>> Contours;
+            vector<Vec4i> hierachy;
+            findContours(tmpsrc, Contours, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+
+            //vector<vector<cv::Point>> ::iterator it = Contours.begin();
+            //cout << "Contours size before" << Contours.size() << endl;
+
+            vector<vector<Point>> Contours_tmp;
+            for (int i = 0; i<Contours.size(); i++)
+            {
+                double area = contourArea(Contours[i]);
+                //cout << area << endl;
+                if (area > 25 && area < 500)  //select contours with area
+                {
+                    Contours_tmp.push_back(Contours[i]);
+                }
+
+            }
+            //cout << "Contours size after" << Contours_tmp.size() << endl;
+
+            //???????START
+            vector<vector<Point>> ::iterator it1 = Contours_tmp.begin();
+            double hu[7] = { 0 };
+            for (; it1 != Contours_tmp.end();)
+            {
+                Moments mon = moments(*it1, true);
+                HuMoments(mon, hu);
+
+                double d = -0.2113* hu[0] - 0.073499*hu[1] - 0.077045*hu[2] - 0.01648*hu[3] + 0.0665155 - 0.015-0.000 +0.0;
+
+                if (d > 0&& (*it1).size()>5) {
+
+
+                    //threshold(tmplight, tmplight, 150, 255, THRESH_BINARY);
+                    //imshow("my_roi222222222222", tmplight);
+                    //vector<vector<cv::Point>> Contours_L, Contours_tmp_L;
+                    //vector<Vec4i> hierachy;
+                    //findContours(tmplight, Contours_L, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+                    //for (int i = 0; i<Contours_L.size(); i++)
+                    //{
+                    //	double area = contourArea(Contours_L[i]);
+                    //	//cout << "area  "<<area << endl;
+                    //	if (area > 0 && area < 1000)
+                    //	{
+                    //		Contours_tmp_L.push_back(Contours_L[i]);
+                    //	}
+                    //}
+                    //cout << "blobs nums" << Contours_tmp_L.size() << endl;
+                    //if (Contours_tmp_L.size() >= 0)
+                    {
+                        RotatedRect ellipsemege = fitEllipse(*it1);
+                        ellipsemege.center.x += j;
+                        ellipsemege.center.y += i;
+                        allroi.push_back(ellipsemege.center);
+                        //cout << "yes!!!!!!!!!!!" << endl;
+                    }
+
+                    //casacade classifier
+                    //std::vector<Rect> eyes;
+                    //eyeCascader.detectMultiScale(tmplight, eyes, 1.1, 3, 0, Size(12, 12));
+                    //cout << "!!!!!!!!!!!!!!!!!!" << eyes.size() << endl;
+
+                }
+                ++it1;
+
+            }
+
+            //imshow("ads", tmpsrc);
+
+            //waitKey();
+            /*double result=compareHist(tmphist, srchist,CV_COMP_CORREL);
+            uchar* re_data = src.ptr<uchar>(i);
+            re_data[j] = result;*/
+            /*uchar* re_data = src.ptr<uchar>(i);
+            double sum = 0;
+            for (int x = 0; x < tmp.rows; x++)
+            {
+                uchar* src_data = src.ptr<uchar>(i + x);
+                uchar* tmp_data= tmp.ptr<uchar>(x);
+                for (int y = 0; y < tmp.cols; y++)
+                {
+                    sum += src_data[j+y] * tmp_data[y];
+                }
+            }
+            re_data[j] = sum;*/
+
+        }
+
+    }
+
+    tm.stop();
+//    Mat show;
+//    srw.copyTo(show);
+//    for (auto c : allroi) {
+//        RotatedRect tmp;
+//        tmp.center = c;
+//        circle(show, c*2, 5, Scalar(255, 0, 0), 10, 10, 0); //draw
+//    }
+//    resize(show,show,Size(640/3,360/3));
+//    imshow("houxuan ",show);
+    //std::cout << "yumethod cost time, ms: " << tm.getTimeMilli() << std::endl;
+    //imshow("asdsad",src);
+    //waitKey();
+    return allroi;
+}
+
+
+int eyeMotionAI::findReality(Mat &srcb, vector<Point2f> &save, char *savepath,vector<Point2f> &pupilCenters,vector<Point2f> &lightCenters)
+{
+    //find light points
+        vector<Point2f> s;
+        for (int i = 0; i < save.size(); i++) {
+            Mat roi_copy(srcb, Rect(abs(save[i].x - 30), abs(save[i].y - 30), 60, 60)), roi;
+            roi_copy.copyTo(roi);
+            //imshow("pic before", roi);
+            threshold(roi, roi, 150, 255, THRESH_BINARY);
+            //imshow("pic 1", roi);
+            vector<vector<cv::Point>> Contours;
+            vector<Vec4i> hierachy;
+            findContours(roi, Contours, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+            for (auto &c : Contours)
+            {
+                if(c.size()>2){
+                    RotatedRect tmp = minAreaRect(c);
+                    tmp.center = tmp.center - Point2f(30, 30);
+                    Point2f loc(save[i] + tmp.center);
+                    s.push_back(loc);
+                    lightCenters.push_back(loc);
+                    circle(srcb, loc, 2, Scalar(0, 0, 0), -1, 5, 0);
+                }
+            }
+        }
+
+        int mythreshhold2 = 33;
+
+        //find pupil center
+        for (int i = 0; i < save.size(); i++) {
+            RotatedRect most;
+            double HtoW = 1.5;
+            double tmp_area = 0;
+            Point2f lastcenter;
+            float lastradius;
+            double areaRatio = 5;
+            vector<cv::Point> p;
+
+            Mat roi_copy(srcb, Rect(abs(save[i].x - 30), abs(save[i].y - 30), 60, 60)),roi;
+            Mat element1 = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
+
+            int n = 1;
+            while (n--)
+            {
+                roi_copy.copyTo(roi);
+                //morphologyEx(roi, roi, MORPH_TOPHAT, element1);
+                for (int i = 0; i < roi.rows; ++i)
+                {
+                    uchar* data = roi.ptr<uchar>(i);
+                    for (int j = 0; j < roi.cols; ++j)
+                    {
+                        if (data[j] > 180)
+                            data[j] = 0;
+
+                    }
+                }
+                //blur(roi,roi,Size(3,3));
+                //imshow("thresh before", roi);
+
+                threshold(roi, roi, mythreshhold2, 255, THRESH_BINARY_INV);
+
+                medianBlur(roi, roi, 3);
+                //imshow("thresh after", roi);
+                //morphologyEx(roi, roi, MORPH_OPEN, element1);
+                mythreshhold2+=2;
+                vector<vector<cv::Point>> Contours;
+                vector<Vec4i> hierachy;
+                findContours(roi, Contours, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+
+
+                for (int i = 0; i<Contours.size(); i++)
+                {
+                    double area = contourArea(Contours[i]);
+                    //cout << "area" << area << endl;
+                    if (area > tmp_area) {
+                        p = Contours[i];
+                        tmp_area = area;
+                    }
+                }
+                if (p.size() < 6)
+                    continue;
+                RotatedRect tmp = fitEllipse(p);
+                Point2f center;
+                float r;
+                //minEnclosingCircle(p, center, r);
+                if (tmp.size.height / tmp.size.width < HtoW && tmp.size.width / tmp.size.height < HtoW
+                    && tmp.size.width *tmp.size.height/ tmp_area<areaRatio
+                    //3.1415*r*r/ tmp_area<areaRatio
+                    && 200<tmp_area<2000) {
+                    areaRatio =tmp.size.width *tmp.size.height / tmp_area; //3.1415*r*r / tmp_area;
+                    most = tmp;
+                    //lastcenter = center;
+                    //lastradius = r;
+                    HtoW = max(tmp.size.height / tmp.size.width, tmp.size.width / tmp.size.height);
+                }
+                //imshow("srcb", srcb);
+                //waitKey();
+            }
+            most.center = most.center- Point2f(30, 30)+ save[i];   //may be error
+
+            pupilCenters.push_back(most.center);
+
+
+            //lastcenter = lastcenter - Point2f(15, 15);
+            //Point2f loc(save[i].center + lastcenter);
+            //circle(srcb, loc, lastradius, Scalar(255), 1, CV_AA, 0);
+            ellipse(srcb, most, Scalar(255), 1, CV_AA); //draw
+
+            mythreshhold2 = 33; //rollback
+        }
+        //draw light points
+        /*for (auto &c : s) {
+            circle(srcb, c, 2, Scalar(0, 0, 0), -1, 5, 0);
+        }*/
+        //resize(srcb, srcb, Size(640, 360), INTER_LINEAR);
+        //imwrite(savepath, srcb);
+        //imshow("srcb", srcb);
+        //waitKey();
+
+}
+
+int eyeMotionAI::findReality2(Mat &roi_copy,Point2f &pupilCenters,vector<Point2f> &lightCenters,RotatedRect &e)
+{
+    //高斯模糊
+     GaussianBlur(roi_copy, roi_copy, Size(3,3),0);//对原图像进行模糊处理
+
+     //********************************************************************光斑***********************************************
+    //find light points
+        vector<Point2f> s;
+        Mat roi;
+        //for (int i = 0; i < save.size(); i++)
+
+        //****************************************************************************原
+        {
+            //Mat roi_copy(srcb, Rect(abs(save[i].x - 30), abs(save[i].y - 30), 60, 60)), roi;
+            roi_copy.copyTo(roi);
+            //imshow("pic before", roi);
+
+            //对拷贝的图像进行阈值处理threshold(源图像，输出图像，阈值，输出图像的最大值，阈值类型)。THRESH_BINARY(大于阈值时设置为最大值，小于阈值时设为0)-------threshold:阈值
+            threshold(roi, roi, 150, 255, THRESH_BINARY);
+
+            //imshow("pic 1", roi);
+
+            //findContours(二值图像，检测到的轮廓（点集:一行存储一个轮廓），***，轮廓检索模式（CV_RETR_CCOMP：双层结构，内外围边界），轮廓近似方法)
+            vector<vector<cv::Point>> Contours;
+            vector<Vec4i> hierachy;
+            findContours(roi, Contours, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+            for (auto &c : Contours)
+            {
+                if(c.size()>2){
+                    //寻找最小包围矩形
+                    RotatedRect tmp = minAreaRect(c);
+                    //tmp.center = tmp.center - Point2f(30, 30);
+                    //Point2f loc(save[i] + tmp.center);
+                    Point2f loc( tmp.center);
+                    s.push_back(loc);
+                    lightCenters.push_back(loc);
+
+                    cout<<"draw light"<<endl;
+                    circle(roi_copy, loc, 2, Scalar(0, 0, 0), -1, 5, 0);
+                }
+            }
+        }
+        //**********************************************************************************************************************************
+
+        int mythreshhold2 = 33;
+
+        //find pupil center
+        //for (int i = 0; i < save.size(); i++)
+        {
+            RotatedRect most;
+            double HtoW = 1.5;
+            double tmp_area = 0;
+            Point2f lastcenter;
+            float lastradius;
+            double areaRatio = 5;
+            vector<cv::Point> p;
+
+            //Mat roi_copy(srcb, Rect(abs(save[i].x - 30), abs(save[i].y - 30), 60, 60)),roi;
+            //Mat element1 = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
+
+            int n = 1;
+            while (n--)
+            {
+                roi_copy.copyTo(roi);
+                //morphologyEx(roi, roi, MORPH_TOPHAT, element1);
+                //***********************************************去除光斑
+                for (int i = 0; i < roi.rows; ++i)
+                {
+                    uchar* data = roi.ptr<uchar>(i);
+                    for (int j = 0; j < roi.cols; ++j)
+                    {
+                        if (data[j] > 180)
+                            data[j] = 0;
+
+                    }
+                }
+                //blur(roi,roi,Size(3,3));
+                //imshow("thresh before", roi);
+
+                //阈值处理
+                threshold(roi, roi, mythreshhold2, 255, THRESH_BINARY_INV);
+
+                //中值滤波：在一个小的范围内取矩阵中值作为该点的值
+                medianBlur(roi, roi, 3);
+                //imshow("thresh after", roi);
+                //morphologyEx(roi, roi, MORPH_OPEN, element1);
+                mythreshhold2+=2;
+                //****************************************求出瞳孔轮廓
+                vector<vector<cv::Point>> Contours;
+                vector<Vec4i> hierachy;
+                findContours(roi, Contours, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+
+
+                for (int i = 0; i<Contours.size(); i++)
+                {
+                    //计算轮廓面积，求出所有轮廓中的最大轮廓（此处以最大轮廓作为瞳孔）
+                    double area = contourArea(Contours[i]);
+                    //cout << "area" << area << endl;
+                    if (area > tmp_area) {
+                        p = Contours[i];
+                        tmp_area = area;
+                    }
+                }
+                if (p.size() < 6)
+                    continue;
+                //椭圆拟合
+                RotatedRect tmp = fitEllipse(p);
+                Point2f center;
+                float r;
+                //minEnclosingCircle(p, center, r);
+                if (tmp.size.height / tmp.size.width < HtoW && tmp.size.width / tmp.size.height < HtoW
+                    && tmp.size.width *tmp.size.height/ tmp_area<areaRatio
+                    //3.1415*r*r/ tmp_area<areaRatio
+                    && 200<tmp_area<2000) {
+                    areaRatio =tmp.size.width *tmp.size.height / tmp_area; //3.1415*r*r / tmp_area;
+                    most = tmp;
+                    //lastcenter = center;
+                    //lastradius = r;
+                    HtoW = max(tmp.size.height / tmp.size.width, tmp.size.width / tmp.size.height);
+                }
+                //imshow("srcb", srcb);
+                //waitKey();
+            }
+            //most.center = most.center- Point2f(30, 30)+ save[i];   //may be error
+
+            pupilCenters=most.center;
+            e=most;
+
+            //lastcenter = lastcenter - Point2f(15, 15);
+            //Point2f loc(save[i].center + lastcenter);
+            //circle(srcb, loc, lastradius, Scalar(255), 1, CV_AA, 0);
+
+            cout<<"draw pupil"<<endl;
+            //Rect rect(e.center.x-e.size.height/2,e.center.y-e.size.width/2,e.size.width,e.size.height);
+            //rectangle(roi_copy,rect,Scalar(255));
+            ellipse(roi_copy, most, Scalar(255), 1, CV_AA); //draw
+
+            mythreshhold2 = 33; //rollback
+        }
+        //draw light points
+        /*for (auto &c : s) {
+            circle(srcb, c, 2, Scalar(0, 0, 0), -1, 5, 0);
+        }*/
+        //resize(srcb, srcb, Size(640, 360), INTER_LINEAR);
+        //imwrite(savepath, srcb);
+        //imshow("srcb", srcb);
+        //waitKey();
+//**********************************************************************改****************************************************
+//        {
+//            //Mat roi_copy(srcb, Rect(abs(save[i].x - 30), abs(save[i].y - 30), 60, 60)), roi;
+//            roi_copy.copyTo(roi);
+//            //imshow("pic before", roi);
+
+//            //对拷贝的图像进行阈值处理threshold(源图像，输出图像，阈值，输出图像的最大值，阈值类型)。THRESH_BINARY(大于阈值时设置为最大值，小于阈值时设为0)-------threshold:阈值
+//            threshold(roi, roi, 150, 255, THRESH_BINARY);
+
+//            //imshow("pic 1", roi);
+
+//            //findContours(二值图像，检测到的轮廓（点集:一行存储一个轮廓），***，轮廓检索模式（CV_RETR_CCOMP：双层结构，内外围边界），轮廓近似方法)
+//            vector<vector<cv::Point>> Contours;
+//            vector<Vec4i> hierachy;
+//            findContours(roi, Contours, hierachy, CV_RETR_CCOMP, CHAIN_APPROX_SIMPLE);
+
+
+//            int minX=max((int)(e.center.x-e.size.height/2-30),0);
+//            int minY=max((int)(e.center.y-e.size.width/2-30),0);
+//            int width=min((int)(e.size.width+60),roi_copy.cols);
+//            int height=min((int)(e.size.height+60),roi_copy.rows);
+//            Rect rect(minX,minY,width,height);
+//            //rectangle(roi_copy,rect,Scalar(0, 0, 0));
+//            vector<cv::Point> dots;
+//            dots.clear();
+//            //cout<<Contours.size()<<endl;
+//            for (auto &c : Contours)
+//            {
+//                if(c.size()>2){
+//                    //寻找最小包围矩形
+//                    RotatedRect tmp = minAreaRect(c);
+//                    //tmp.center = tmp.center - Point2f(30, 30);
+//                    //Point2f loc(save[i] + tmp.center);
+//                    Point2f loc( tmp.center);
+//                    //cout<<rect.x<<endl;
+//                    //cout<<loc.y<<endl;
+//                    //if(rect.contains(loc) && rect.y<loc.y){
+//                    //if(rect.contains(loc)){
+//                        dots.push_back(loc);
+//                        s.push_back(loc);
+//                        lightCenters.push_back(loc);
+//                        cout<<"draw light"<<endl;
+//                        circle(roi_copy, loc, 2, Scalar(0, 0, 0), -1, 5, 0);
+//                    //}
+//                }
+//            }
+////            cout<<dots.size()<<endl;
+////            int dots_size=dots.size();
+////            for(int i=0;i<dots_size-1;++i){
+////                for(int j=i+1;j<dots_size;++j){
+////                    double distance=sqrt((dots[i].x-dots[j].x)*(dots[i].x-dots[j].x)+(dots[i].y-dots[j].y)*(dots[i].y-dots[j].y));
+////                    cout<<distance<<endl;
+////                    double coord_diff = abs(dots[i].y-dots[j].y);
+////                    cout<<coord_diff<<endl;
+////                    if((5<=distance && distance<=25) && (0<=coord_diff && coord_diff<15)){
+////                    //if((10<=distance && distance<=35)){
+////                        s.push_back(dots[i]);
+////                        lightCenters.push_back(dots[i]);
+////                        cout<<"draw light"<<endl;
+////                        circle(roi_copy, dots[i], 2, Scalar(0, 0, 0), -1, 5, 0);
+////                        s.push_back(dots[j]);
+////                        lightCenters.push_back(dots[j]);
+////                        cout<<"draw light"<<endl;
+////                        circle(roi_copy, dots[j], 2, Scalar(0, 0, 0), -1, 5, 0);
+////                        break;
+////                    }
+////                }
+////            }
+//        }
+//*******************************************************************************************************************************
+}
+Mat eyeMotionAI::classify(Mat &img)
+{
+    //! [Prepare blob]
+/*	int avr = 0;
+    double sum = 0;
+    for (int i = 0; i < img.rows; i++)
+    {
+        uchar* data = img.ptr<uchar>(i);
+        for (int j = 0; j < img.cols; j++)
+            sum += data[j];
+    }
+    avr = sum / (img.rows*img.cols);
+    cout << "avr" << avr << endl;
+    */
+    //Mat inputBlob = blobFromImage(img, 1.0, Size(), Scalar(avr, avr, avr), true, true);   //Convert Mat to image batch
+    Mat inputBlob = blobFromImage(img);													  //! [Prepare blob]
+                                                                                          //inputBlob -= 117.0;
+
+                                                                                          //! [Set input blob]
+    net.setInput(inputBlob);        //set the network input
+                                    //! [Set input blob]
+
+    //cv::TickMeter tm;
+    //tm.start();
+
+    //! [Make forward pass]
+    Mat result;
+    //for(int i=0;i<1000;i++)
+    result = net.forward("softmaxout");                          //compute output
+                                                                //! [Make forward pass]
+
+                                                                //for
+    //tm.stop();
+   // cout << result << endl;
+    //std::cout << "Inference time, ms: " << tm.getTimeMilli()  << std::endl;
+    return result;
+}
+void eyeMotionAI::allProcess(Mat &src_w, Mat &src_b,vector<Point2f> &pupilCenters,vector<Point2f> &lightCenters)
+{
+
+     double time = getTickCount();
+     char* p=nullptr;
+
+     vector<Point2f> re = findRoughBorderWithTF_recent(src_w, src_b,p);
+
+     time = (getTickCount() - time) / getTickFrequency();
+
+     if(couter>0&& couter<179){
+                total_time+=time;
+                cout<<"avr time = "<<total_time/couter<<endl;
+
+     }
+     couter++;
+     //*************************临近点聚合(默认只有两个点集)
+     vector<Point2f> anotherPointSets;
+     vector<Point2f> smallPoints;
+     if(re.size()>0){
+
+         smallPoints.push_back(re[0]);
+
+
+         for(int i=1;i<re.size();i++){
+             //for(int j=0;j<smallPoints.size();j++)
+             {
+                 Point2f tmp=smallPoints[0]-re[i];
+                 double distance=sqrt(tmp.x*tmp.x+tmp.y*tmp.y);
+                 if(distance<100){
+                     smallPoints[0]=(smallPoints[0]+re[i])/2;
+                 }else {
+                     anotherPointSets.push_back(re[i]);
+
+                 }
+             }
+         }
+     }
+     if(anotherPointSets.size()>0){
+         smallPoints.push_back(anotherPointSets[0]);
+         for(int i=1;i<anotherPointSets.size();i++){
+             //for(int j=0;j<smallPoints.size();j++)
+             {
+                 Point2f tmp=smallPoints[1]-anotherPointSets[i];
+                 double distance=sqrt(tmp.x*tmp.x+tmp.y*tmp.y);
+                 if(distance<100){
+                     smallPoints[1]=(smallPoints[1]+anotherPointSets[i])/2;
+                 }else {
+                     //anotherPointSets.push_back(re[i]);
+
+                 }
+             }
+
+        }
+     }
+
+     //*************************
+     //test
+     //pupilCenters=smallPoints;
+     //
+
+     //*****************************
+     //cout<<smallPoints.size()<<endl;
+     findReality(src_b, smallPoints, p,pupilCenters,lightCenters);
+
+
+//     for (auto c : smallPoints) {
+//         RotatedRect tmp;
+//         tmp.center= c;
+//         Point top_left(c.x - 40, c.y - 40);
+//         Point bottom_right(c.x+40, c.y +40);
+//         //circle(src_b, c, 20, Scalar(255, 255, 255), 5, 1, 0); //draw
+//         rectangle(src_b, top_left, bottom_right, Scalar(255, 255, 255),3);
+//         //circle(imgSrcb, c, 20, Scalar(255, 0, 0), -1, 5, 0); //draw
+//    }
+     cout<<re.size()<<endl;
+     cout<<smallPoints.size()<<endl;
+}

@@ -1,0 +1,1387 @@
+#include "mainwindow.h"
+#include "ui_mainwindow.h"
+
+#include <cmath>
+#include <QDir>
+#include <QFileDialog>
+#include <QDebug>
+#include <QLabel>
+#include <QPainter>
+#include <QDateTime>
+#include <QTime>
+
+int ccount=0;
+extern double total_time;
+extern int couter;
+void getFiles(string path, string exd, vector<string>& files, vector<string>& picName)
+{
+    //文件句柄
+    long long   hFile = 0;
+    //文件信息
+    struct _finddata_t fileinfo;
+    string pathName, exdName;
+
+    if (0 != strcmp(exd.c_str(), ""))
+    {
+        exdName = "\\*." + exd;
+    }
+    else
+    {
+        exdName = "\\*";
+    }
+
+    if ((hFile = _findfirst(pathName.assign(path).append(exdName).c_str(), &fileinfo)) != -1)
+    {
+        do
+        {
+            //如果是文件夹中仍有文件夹,迭代之
+            //如果不是,加入列表
+            if ((fileinfo.attrib &  _A_SUBDIR))
+            {
+                if (strcmp(fileinfo.name, ".") != 0 && strcmp(fileinfo.name, "..") != 0)
+                    getFiles(pathName.assign(path).append("\\").append(fileinfo.name), exd, files,picName);
+            }
+            else
+            {
+                if (strcmp(fileinfo.name, ".") != 0 && strcmp(fileinfo.name, "..") != 0)
+                    files.push_back(pathName.assign(path).append("\\").append(fileinfo.name));
+                    picName.push_back(fileinfo.name);
+            }
+        } while (_findnext(hFile, &fileinfo) == 0);
+        _findclose(hFile);
+    }
+}
+
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    ui(new Ui::MainWindow)
+{
+    timer=new QTimer(this);
+    ui->setupUi(this);
+//    if(QMessageBox::No == QMessageBox::question(this,QString::fromLocal8Bit("覆盖标签文件吗？"),QString::fromLocal8Bit("是否将标签文件覆盖"),QMessageBox::Yes | QMessageBox::No,QMessageBox::No)){
+//        out.open("labels.txt",ios_base::app);
+//    }else {
+//        out.open("labels.txt",ios_base::out);
+//    }
+
+
+
+//    file.setFileName("labels.txt");
+//    if (file.open(QFile::WriteOnly | QIODevice::Truncate)) {
+//        out.setDevice(&file);
+//        out << "The answer is " << 42;
+//    }
+
+
+    for(int k=0;k<256;++k)
+    {
+        colorTable.push_back( qRgb(k,k,k) );
+    }
+    connect(timer,SIGNAL(timeout()),this,SLOT(update()));
+
+    //跟踪器类对象
+    track = new TrackerUtils();
+
+    //设置按键使能
+    ui->start->setEnabled(false);
+    ui->saveAllInfo->setEnabled(false);
+    ui->preImage->setEnabled(false);
+    ui->nextImage->setEnabled(false);
+    ui->eyeLeft->setEnabled(false);
+    ui->eyeRight->setEnabled(false);
+    ui->currentSaveInfo->setEnabled(false);
+    ui->irisCenterCalc->setEnabled(false);
+    ui->lightCenterCalc->setEnabled(false);
+    ui->pupilCenterCalc->setEnabled(false);
+    ui->boxMethod->setEnabled(false);
+    ui->circleMethod->setEnabled(false);
+    ui->elipseMethod->setEnabled(false);
+
+    ui->boxZero->setEnabled(false);
+    ui->circleZero->setEnabled(false);
+    ui->elipseZero->setEnabled(false);
+
+    ui->jumpPic->setEnabled(false);
+    ui->jumpPic->setPlaceholderText(QString::fromLocal8Bit("跳页"));
+    //ui->jumpPic->setHidden(true);
+}
+
+MainWindow::~MainWindow()
+{
+    delete ui;
+    out.close();
+    //file.close();
+}
+
+void MainWindow::showINFO(const QString &s)
+{
+    QString info(QDateTime::currentDateTime().toString("[hh:mm:ss]: "));
+    info.append(s);
+    ui->statusShow->append(info);
+}
+
+void MainWindow::mouseMoveEvent(QMouseEvent *event)
+{
+    real_Time_pos=ui->fullPic->mapFromGlobal(event->globalPos());
+}
+
+void MainWindow::mousePressEvent(QMouseEvent *event)
+{
+    leftUP=ui->fullPic->mapFromGlobal(event->globalPos());
+    //qDebug()<<"dfssss";
+}
+
+void MainWindow::mouseReleaseEvent(QMouseEvent *event)
+{
+    rightDown=ui->fullPic->mapFromGlobal(event->globalPos());
+    //Mat t;
+    //originalImage.copyTo(localImage);
+    //cout<<originalImage.size<<endl;
+    //if(leftUP.x()<rightDown.x()&&leftUP.y()<rightDown.y() && QRect(0,0,640,360).contains(rightDown) && QRect(0,0,640,360).contains(leftUP)){
+    if(leftUP.x()<rightDown.x()&&leftUP.y()<rightDown.y() && QRect(0,0,imageData.cols/imgScale,imageData.rows/imgScale).contains(rightDown) && QRect(0,0,imageData.cols/imgScale,imageData.rows/imgScale).contains(leftUP)){
+        //qDebug()<<"dfssss";
+        //localImage=Mat(originalImage, Rect(leftUP.x()*2, leftUP.y()*2, abs(rightDown.x()-leftUP.x())*2, abs(rightDown.y()-leftUP.y())*2));
+        localImage=Mat(originalImage, Rect(leftUP.x()*imgScale, leftUP.y()*imgScale, abs(rightDown.x()-leftUP.x())*imgScale, abs(rightDown.y()-leftUP.y())*imgScale));
+        mulriple = 1;
+        while(abs(rightDown.x()-leftUP.x())*imgScale*mulriple<=640 || abs(rightDown.y()-leftUP.y())*imgScale*mulriple<=360){
+            ++mulriple;
+        }
+
+        Mat mask2;
+        localImage.copyTo(mask2);
+
+        Rect rect = Rect(0,0,0,0);
+        if(is_eyeLeft){
+            //虹膜
+            //*****************************************************KCF*************************************************************************
+            if(image_counter==0){
+                //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请通过方框拟合求解虹膜中心，确定跟踪目标!!!"));
+                rect_left = rect;
+            }else{
+                if(!track->track_left(originalImage)){
+                    //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请重新求取左眼虹膜中心！"));
+                }else{
+                    rect_left = track->rect_left;
+                    //if(leftUP.x()*2<rect_left.x){
+//                    if(leftUP.x()*imgScale<rect_left.x){
+//                        //rect = Rect((rect_left.x-leftUP.x()*imgScale)*mulriple,(rect_left.y-leftUP.y()*imgScale)*mulriple,rect_left.width*mulriple,rect_left.height*mulriple);
+//                        rect = Rect((rect_left.x-leftUP.x()*imgScale)*mulriple,(rect_left.y-leftUP.y()*imgScale)*mulriple,rect_left.width*mulriple,rect_left.height*mulriple);
+//                    }
+                    rect = Rect((rect_left.x-leftUP.x()*imgScale)*mulriple,(rect_left.y-leftUP.y()*imgScale)*mulriple,rect_left.width*mulriple,rect_left.height*mulriple);
+                    irisCenter = Point2f(rect_left.x+rect_left.width/2,rect_left.y+rect_left.height/2);
+                    irisWidth = rect_left.width;
+                    irisHeight = rect_left.height;
+                }
+            }
+        }
+
+        if(is_eyeRight){
+            //虹膜
+            //*****************************************************KCF*************************************************************************
+            if(image_counter==0){
+                //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请通过方框拟合求解虹膜中心，确定跟踪目标!!!"));
+                rect_right = rect;
+            }else{
+                if(!track->track_right(originalImage)){
+                    //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请重新求取右眼虹膜中心！"));
+                }else{
+                    rect_right = track->rect_right;
+                    //if(leftUP.x()*2<rect_right.x){
+//                    if(leftUP.x()*imgScale<rect_left.x){
+//                        //rect = Rect((rect_right.x-leftUP.x()*2)*mulriple,(rect_right.y-leftUP.y()*2)*mulriple,rect_right.width*mulriple,rect_right.height*mulriple);
+//                        rect = Rect((rect_left.x-leftUP.x()*imgScale)*mulriple,(rect_left.y-leftUP.y()*imgScale)*mulriple,rect_left.width*mulriple,rect_left.height*mulriple);
+//                    }
+                    rect = Rect((rect_right.x-leftUP.x()*imgScale)*mulriple,(rect_right.y-leftUP.y()*imgScale)*mulriple,rect_right.width*mulriple,rect_right.height*mulriple);
+                    irisCenter = Point2f(rect_right.x+rect_right.width/2,rect_right.y+rect_right.height/2);
+                    irisWidth = rect_right.width;
+                    irisHeight = rect_right.height;
+                }
+            }
+        }
+
+        //imshow("sad_before",mask2);
+
+        Point2f pupilCenter;
+        vector<Point2f> lights;
+        yu.findReality2(mask2,pupilCenter,lights,e);
+
+
+        //SAVE
+        Point2f leftTop;
+//        leftTop.x=leftUP.x()*2;
+//        leftTop.y=leftUP.y()*2;
+        leftTop.x=leftUP.x()*imgScale;
+        leftTop.y=leftUP.y()*imgScale;
+
+        e.center=e.center+leftTop;
+        pupilCenter=pupilCenter+leftTop;
+        if(is_eyeLeft){
+            LpupilCenter=pupilCenter;
+            if(lights.size()==2){
+                LlightCenter1=lights[0]+leftTop;
+                LlightCenter2=lights[1]+leftTop;
+            }else {
+               //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("光斑不是两个!!!"));
+            }
+
+        }else {
+            RpupilCenter=pupilCenter;
+            if(lights.size()==2){
+                RlightCenter1=lights[0]+leftTop;
+                RlightCenter2=lights[1]+leftTop;
+            }else{
+                //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("光斑不是两个!!!"));
+            }
+        }
+
+        //imshow("sad_after",mask2);
+        //mask2.copyTo(eyeinfo->eyeMask);
+        //rectangle(mask2,Rect(100,100,30,30),Scalar(255,255,255),1);
+        cv::resize(mask2,mask2,Size(mask2.cols*mulriple,mask2.rows*mulriple));
+        rectangle(mask2,rect,Scalar(255,255,255),1);
+        //imshow("dsd",mask2);
+        QImage im2((uchar*)mask2.data,mask2.cols,mask2.rows,mask2.step,QImage::Format_Indexed8);
+
+
+        //************************************************************************************
+//        if(algorithshow!=nullptr){
+//            delete algorithshow;
+//        }
+        //mask.copyTo(eyeinfo->eyeMask);
+        /*
+        Mat temp;
+        mask.copyTo(temp);
+        QImage img((uchar*)temp.data,temp.cols,temp.rows,temp.step,QImage::Format_Indexed8);
+        img.setColorTable(colorTable);
+        */
+//        algorithshow = new algorithmShow();
+//        algorithshow->setFixedSize(mask2.cols,mask2.rows);
+        //algorithshow->setPixmap(QPixmap::fromImage(im2));
+        //algorithshow->show();
+
+        Mat mask;
+        localImage.copyTo(mask);
+        cv::resize(mask,mask,Size(mask.cols*mulriple,mask.rows*mulriple));
+        QImage im((uchar*)mask.data,mask.cols,mask.rows,mask.step,QImage::Format_Indexed8);
+        im.setColorTable(colorTable);
+        if(eyeinfo!=nullptr){
+            delete eyeinfo;
+        }
+        eyeinfo = new locEyeInfo();
+        eyeinfo->eyeMask = mask;
+        im.setColorTable(colorTable);
+        //eyeinfo->resize(mask.cols,mask.rows);
+        eyeinfo->setFixedSize(mask.cols,mask.rows);
+        //eyeinfo->setPixmap(QPixmap::fromImage(im));
+        eyeinfo->setPixmap(QPixmap::fromImage(im2));
+        eyeinfo->show();
+
+    }
+        /*
+        //显示算法结果
+        Mat t2;
+        imageData.copyTo(t2);
+        cout<<imageData.size<<endl;
+        localImage2=Mat(t2,Rect(leftUP.x()*2, leftUP.y()*2, abs(rightDown.x()-leftUP.x())*2, abs(rightDown.y()-leftUP.y())*2));
+        Mat mask2;
+        localImage2.copyTo(mask2);
+        cv::resize(mask2,mask2,Size(mask2.cols*mulriple,mask2.rows*mulriple));
+        imshow("eye",mask2);
+        */
+}
+
+void MainWindow::keyPressEvent(QKeyEvent *event){
+    switch (event->key()) {
+    case Qt::Key_1:
+        if(elipseLabel==nullptr && eyeinfo!=nullptr){
+            eyeinfo->hide();
+        }else if(elipseLabel!=nullptr && eyeinfo!=nullptr){
+            elipseLabel->hide();
+        }
+        break;
+    case Qt::Key_2:
+        //cout<<"2"<<endl;
+        if(elipseLabel==nullptr && eyeinfo!=nullptr){
+            eyeinfo->show();
+        }else if(elipseLabel!=nullptr && eyeinfo!=nullptr){
+            elipseLabel->show();
+        }
+        //cout<<"22"<<endl;
+    }
+}
+
+void MainWindow::paintEvent(QPaintEvent *event)
+{
+    Mat mask;
+    imageData.copyTo(mask);
+    //if(leftUP.x()<640 && leftUP.y()<360 && real_Time_pos.x()<640 && real_Time_pos.y()<360 ){
+    if(leftUP.x()<imageData.cols/imgScale && leftUP.y()<imageData.rows/imgScale && real_Time_pos.x()<imageData.cols/imgScale && real_Time_pos.y()<imageData.rows/imgScale ){
+        //rectangle(mask, Rect(leftUP.x()*2,leftUP.y()*2,(real_Time_pos.x()-leftUP.x())*2,(real_Time_pos.y()-leftUP.y())*2), Scalar(255, 255, 255),2);
+        rectangle(mask, Rect(leftUP.x()*imgScale,leftUP.y()*imgScale,(real_Time_pos.x()-leftUP.x())*imgScale,(real_Time_pos.y()-leftUP.y())*imgScale), Scalar(255, 255, 255),2);
+        QImage im(mask.data,mask.cols,mask.rows,mask.step,QImage::Format_Indexed8);
+        im.setColorTable(colorTable);
+        //QSize sz(640,360);
+        QSize sz(imageData.cols/imgScale,imageData.rows/imgScale);
+        ui->fullPic->resize(sz);
+        QPixmap pix=QPixmap::fromImage(im.scaled(sz));
+        ui->fullPic->setPixmap(pix);
+    }
+
+
+}
+
+//**********************************************************************************************************************************
+void MainWindow::on_pushButton_imagePath_clicked()
+{
+    ui->lineEdit->setText(QFileDialog::getExistingDirectory(this,"Select data dir",QDir::currentPath()));
+
+    path=ui->lineEdit->text().toStdString();
+
+    //cout<<path<<endl;
+    files.clear();
+    picName.clear();
+    //****************************************************文件
+    getFiles(path, "", files, picName);
+
+    totalImages=files.size();
+    if(totalImages>0){
+        QString s=QString(tr("Read the image file path successfully")).arg(image_counter);
+        showINFO(s);
+    }else{
+        QString s=QString(tr("Failed to read the image file path, please re-read")).arg(image_counter);
+        showINFO(s);
+    }
+    //设置按键使能
+    ui->start->setEnabled(true);
+}
+
+void MainWindow::on_start_clicked()
+{
+    //***********************************************************文件
+//    if(QMessageBox::No == QMessageBox::question(this,QString::fromLocal8Bit("覆盖标签文件吗？"),QString::fromLocal8Bit("是否将标签文件覆盖"),QMessageBox::Yes | QMessageBox::No,QMessageBox::No)){
+//        out.open("labels.txt",ios_base::app);
+//    }else {
+//        out.open("labels.txt",ios_base::out);
+//    }
+    //*****************************************没有文件则新建，有则末尾添加
+    string txtPath = path + "\\labels.txt";
+    //cout<<txtPath<<endl;
+    QFile file(QString::fromStdString(txtPath));
+    //**********************************************************
+    file.open(QIODevice::ReadOnly);
+    QTextStream preTxt(&file);
+    //string str = preTxt.readAll().toStdString();
+    //cout<<str<<endl;
+    int i = 0;
+    //cout<<i<<endl;
+    infos.clear();  //以字符串的形式保存所有信息
+    infos.assign(totalImages,"");
+    while(!preTxt.atEnd()){
+        //cout<<i<<endl;
+        //每次读取一行
+        string str = preTxt.readLine().toStdString();
+        //cout<<str<<endl;
+        infos[i]=str;
+        //cout<<infos[i]<<endl;
+        ++i;
+    }
+    file.close();
+
+    //cout<<"0"<<endl;
+    //cout<<infos[0]<<endl;
+//    for(auto c:infos){
+//        //cout<<"2"<<endl;
+//        cout<<c<<endl;
+//    }
+    //cout<<"1"<<endl;
+
+    out.open(txtPath,ios_base::out);
+//    if(!file.exists()){
+//        out.open(txtPath,ios_base::out);
+//    }else{
+//        out.open(txtPath,ios_base::app);
+//    }
+
+
+//    if(!is_startWorkFirst){
+//        if(QMessageBox::No == QMessageBox::question(this,QString::fromLocal8Bit("保存提示"),QString::fromLocal8Bit("是否要删除已标注信息，重新开始标注？"),QMessageBox::Yes | QMessageBox::No,QMessageBox::No)){
+//            return;
+//        }
+//    }
+    //************************************************清空所有保存信息？？？？
+    //lightCenters.clear();  //两个光斑中心
+    //lightCenters.push_back(Point2f(0,0));
+    //lightCenters.push_back(Point2f(0,0));
+    //pupilCenters.clear();  //瞳孔中心
+    //pupilCenters.push_back(Point2f(0,0));
+    //pupilCenters.push_back(Point2f(0,0));
+    for(int i=0;i<3;++i){
+        left_right_info.push_back("");
+    }
+    pupilCenters.clear();
+    lightCenters.clear();
+    LpupilCenter = Point2f(0,0);
+    LlightCenter1 = Point2f(0,0);
+    LlightCenter2 = Point2f(0,0);
+
+    RpupilCenter = Point2f(0,0);
+    RlightCenter1 = Point2f(0,0);
+    RlightCenter2 = Point2f(0,0);
+
+    irisCenter = Point2f(0,0);   //虹膜中心
+    irisWidth = 0;      //虹膜宽
+    irisHeight = 0;     //虹膜高
+    //***************************************************************************************
+    //设置按键使能
+    ui->saveAllInfo->setEnabled(true);
+    ui->preImage->setEnabled(true);
+    ui->nextImage->setEnabled(true);
+    ui->eyeLeft->setEnabled(true);
+    ui->eyeRight->setEnabled(true);
+    ui->jumpPic->setEnabled(true);
+//    ui->boxZero->setEnabled(true);
+//    ui->circleZero->setEnabled(true);
+//    ui->elipseZero->setEnabled(true);
+    QIntValidator* aIntValidator = new QIntValidator;
+    aIntValidator->setRange(0,totalImages);
+    ui->jumpPic->setValidator(aIntValidator);
+
+    //is_startWorkFirst=false;
+
+    total_time=0;
+    couter=0;
+
+//    //**********************************************************
+//    file.open(QIODevice::ReadOnly);
+//    QTextStream preTxt(&file);
+//    string str = preTxt.readLine().toStdString();
+//    cout<<str<<endl;
+//    int i = 0;
+//    //cout<<i<<endl;
+//    while(!preTxt.atEnd()){
+//        cout<<i<<endl;
+//        //每次读取一行
+//        string str = preTxt.readLine().toStdString();
+//        infos[i++]=str;
+//    }
+    //cout<<path<<endl;
+    //qDebug()<<totalImages;
+    //cout<<files[0]<<endl;
+
+    //image_counter=0;
+    image_counter = i;
+    //*****************************************************改
+    maxProgress = i;
+    QString s=QString(tr("NO %1 pic")).arg(image_counter);
+    showINFO(s);
+    imageData = imread(files[image_counter],0);
+    imageData.copyTo(originalImage);
+
+    //*********************************************************瞳孔、光斑(lightCenter)????*****************************************
+//    yu.allProcess(imageData,imageData,pupilCenters,lightCenters);
+
+//    if(pupilCenters.size()==2){
+//        if(pupilCenters[0].x<pupilCenters[1].x){
+//            LpupilCenter=pupilCenters[0];
+//            RpupilCenter=pupilCenters[1];
+
+//            LlightCenter1=lightCenters[0];
+//            LlightCenter2=lightCenters[1];
+
+//            RlightCenter1=lightCenters[2];
+//            RlightCenter2=lightCenters[3];
+
+//        }else {
+//            LpupilCenter=pupilCenters[1];
+//            RpupilCenter=pupilCenters[0];
+
+//            LlightCenter1=lightCenters[2];
+//            LlightCenter2=lightCenters[3];
+
+//            RlightCenter1=lightCenters[0];
+//            RlightCenter2=lightCenters[1];
+//        }
+//    }else{
+//        QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请重新计算瞳孔中心!!!"));
+//    }
+
+//    if(lightCenters.size()==4){
+//        //qDebug()<<"lightCenters size is  equal to 4,it is right";
+//    }else {
+//        QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请重新计算光斑中心中心!!!"));
+//    }
+
+
+    //QSize sz(640,360);
+    while(imageData.cols/imgScale>640 || imageData.rows/imgScale>360){
+        ++imgScale;
+    }
+    QSize sz(imageData.cols/imgScale,imageData.rows/imgScale);
+    QImage im(imageData.data,imageData.cols,imageData.rows,imageData.step,QImage::Format_Indexed8);
+    im.setColorTable(colorTable);
+
+    ui->fullPic->resize(sz);
+    ui->fullPic->setPixmap(QPixmap::fromImage(im.scaled(sz)));
+
+    timer->start(20);
+
+    //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请点击左眼按钮再截取眼图!!!"));
+
+    //*************************************************************测试
+//    Mat tt;
+//    originalImage.copyTo(tt);
+//    //左瞳孔中心
+//    rectangle(tt,Rect(872,656,2,2),Scalar(0,163,234),2);
+//    //左光斑(有问题)
+//    rectangle(tt,Rect(838,664,2,2),Scalar(0,163,234),2);
+//    rectangle(tt,Rect(879,664,2,2),Scalar(0,163,234),2);
+//    //左虹膜中心
+//    rectangle(tt,Rect(869,663,2,2),Scalar(0,163,234),2);
+//    //右瞳孔中心
+//    rectangle(tt,Rect(848,446,2,2),Scalar(0,163,234),2);
+//    //右光斑
+//    rectangle(tt,Rect(861,455,2,2),Scalar(0,163,234),2);
+//    rectangle(tt,Rect(843,454,2,2),Scalar(0,163,234),2);
+//    //右虹膜
+//    //rectangle(tt,Rect(850,445,2,2),Scalar(0,163,234),2);
+//    imshow("dsd",tt);
+}
+
+void MainWindow::on_saveAllInfo_clicked()
+{
+    //*******************************************************改
+//    for(;saveProgress<=maxProgress;++saveProgress){
+//        out<<infos[saveProgress];
+//        out<<endl;
+//    }
+    //--saveProgress;
+    out.seekp(0,ios::beg);
+    for(int i=0;i<=maxProgress;++i){
+        out<<infos[i];
+        out<<endl;
+    }
+
+
+//    if(QMessageBox::Yes == QMessageBox::question(this,QString::fromLocal8Bit("保存提示"),QString::fromLocal8Bit("是否标定完所有瞳孔中心，并保存所有中心点信息？"),QMessageBox::Yes | QMessageBox::No,QMessageBox::No)){
+//        //cout<<"fs"<<endl;
+//        //out<<"fs"<<endl;
+//        for(auto c:infos){
+//            if(c=="")
+//                break;
+//            out<<c;
+//            out<<endl;
+//        }
+//    }
+}
+
+void MainWindow::on_preImage_clicked()
+{
+//    if(QMessageBox::No == QMessageBox::question(this,QString::fromLocal8Bit("提示信息"),QString::fromLocal8Bit("是否返回上一张？"),QMessageBox::Yes | QMessageBox::No,QMessageBox::No)){
+//        return;
+//    }
+    //ui->nextImage->setEnabled(false);
+    //ui->eyeRight->setEnabled(false);
+    //**********************************************改
+
+    for(int i=0;i<3;++i){
+        left_right_info[i]="";
+    }
+    ui->currentSaveInfo->setEnabled(false);
+    ui->irisCenterCalc->setEnabled(false);
+    ui->lightCenterCalc->setEnabled(false);
+    ui->pupilCenterCalc->setEnabled(false);
+    ui->boxMethod->setEnabled(false);
+    ui->circleMethod->setEnabled(false);
+    ui->elipseMethod->setEnabled(false);
+
+    ui->boxZero->setEnabled(false);
+    ui->circleZero->setEnabled(false);
+    ui->elipseZero->setEnabled(false);
+
+    //信息清零
+    pupilCenters.clear();
+    lightCenters.clear();
+    LpupilCenter = Point2f(0,0);
+    LlightCenter1 = Point2f(0,0);
+    LlightCenter2 = Point2f(0,0);
+
+    RpupilCenter = Point2f(0,0);
+    RlightCenter1 = Point2f(0,0);
+    RlightCenter2 = Point2f(0,0);
+
+    irisCenter = Point2f(0,0);   //虹膜中心
+    irisWidth = 0;      //虹膜宽
+    irisHeight = 0;     //虹膜高
+
+    imgScale = 1;
+    mulriple = 1;
+
+    if(image_counter>0&&image_counter<totalImages-1) image_counter--;
+    imageData = imread(files[image_counter],0);
+    imageData.copyTo(originalImage);
+    QString s=QString(tr("NO %1 pic")).arg(image_counter);
+    showINFO(s);
+
+    /*
+    pupilCenters.clear();
+    lightCenters.clear();
+    yu.allProcess(imageData,imageData,pupilCenters,lightCenters);
+
+    if(pupilCenters.size()==2){
+        if(pupilCenters[0].x<pupilCenters[1].x){
+            LpupilCenter=pupilCenters[0];
+            RpupilCenter=pupilCenters[1];
+
+            LlightCenter1=lightCenters[0];
+            LlightCenter2=lightCenters[1];
+
+            RlightCenter1=lightCenters[2];
+            RlightCenter2=lightCenters[3];
+
+        }else {
+            LpupilCenter=pupilCenters[1];
+            RpupilCenter=pupilCenters[0];
+
+            LlightCenter1=lightCenters[2];
+            LlightCenter2=lightCenters[3];
+
+            RlightCenter1=lightCenters[0];
+            RlightCenter2=lightCenters[1];
+        }
+    }else{
+        QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请重新计算瞳孔中心!!!"));
+    }
+
+    if(lightCenters.size()==4){
+        //qDebug()<<"lightCenters size is  equal to 4,it is right";
+    }else {
+        QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请重新计算光斑中心中心!!!"));
+    }
+    */
+    //QSize sz(640,360);
+    while(imageData.cols/imgScale>640 || imageData.rows/imgScale>360){
+        ++imgScale;
+    }
+    QSize sz(imageData.cols/imgScale,imageData.rows/imgScale);
+    QImage im(imageData.data,imageData.cols,imageData.rows,imageData.step,QImage::Format_Indexed8);
+
+    ui->fullPic->resize(sz);
+    im.setColorTable(colorTable);
+    ui->fullPic->setPixmap(QPixmap::fromImage(im.scaled(sz)));
+
+    //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请点击左眼按钮再截取眼图!!!"));
+}
+
+void MainWindow::on_nextImage_clicked()
+{
+    if(maxProgress!=totalImages-1)
+        ++maxProgress;
+    ui->saveAllInfo->click();
+    //信息清零
+    for(int i=0;i<3;++i){
+        left_right_info[i]="";
+    }
+    pupilCenters.clear();
+    lightCenters.clear();
+    LpupilCenter = Point2f(0,0);
+    LlightCenter1 = Point2f(0,0);
+    LlightCenter2 = Point2f(0,0);
+
+    RpupilCenter = Point2f(0,0);
+    RlightCenter1 = Point2f(0,0);
+    RlightCenter2 = Point2f(0,0);
+
+    irisCenter = Point2f(0,0);   //虹膜中心
+    irisWidth = 0;      //虹膜宽
+    irisHeight = 0;     //虹膜高
+
+    imgScale = 1;
+    mulriple = 1;
+
+    //ui->eyeLeft->setEnabled(true);
+    //ui->eyeRight->setEnabled(false);
+    //ui->nextImage->setEnabled(false);
+    ui->currentSaveInfo->setEnabled(false);
+    ui->irisCenterCalc->setEnabled(false);
+    ui->lightCenterCalc->setEnabled(false);
+    ui->pupilCenterCalc->setEnabled(false);
+    ui->boxMethod->setEnabled(false);
+    ui->circleMethod->setEnabled(false);
+    ui->elipseMethod->setEnabled(false);
+
+    ui->boxZero->setEnabled(false);
+    ui->circleZero->setEnabled(false);
+    ui->elipseZero->setEnabled(false);
+    //is_draw = false;
+
+    if(image_counter<totalImages-1 && image_counter+10<totalImages-1 ) image_counter=image_counter+1;//image_counter++;
+    imageData = imread(files[image_counter],0);
+    imageData.copyTo(originalImage);
+    QString s=QString(tr("NO %1 pic")).arg(image_counter);
+    showINFO(s);
+
+//    pupilCenters.clear();
+//    lightCenters.clear();
+
+//    yu.allProcess(imageData,imageData,pupilCenters,lightCenters);
+
+//    if(pupilCenters.size()==2){
+//        if(pupilCenters[0].x<pupilCenters[1].x){
+//            LpupilCenter=pupilCenters[0];
+//            RpupilCenter=pupilCenters[1];
+
+//            LlightCenter1=lightCenters[0];
+//            LlightCenter2=lightCenters[1];
+
+//            RlightCenter1=lightCenters[2];
+//            RlightCenter2=lightCenters[3];
+
+//        }else {
+//            LpupilCenter=pupilCenters[1];
+//            RpupilCenter=pupilCenters[0];
+
+//            LlightCenter1=lightCenters[2];
+//            LlightCenter2=lightCenters[3];
+
+//            RlightCenter1=lightCenters[0];
+//            RlightCenter2=lightCenters[1];
+//        }
+//    }else{
+//        QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请重新计算瞳孔中心!!!"));
+//    }
+
+//    if(lightCenters.size()==4){
+//        //qDebug()<<"lightCenters size is  equal to 4,it is right";
+//    }else {
+//        QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请重新计算光斑中心中心!!!"));
+//    }
+
+    //QSize sz(640,360);
+    while(imageData.cols/imgScale>640 || imageData.rows/imgScale>360){
+        ++imgScale;
+    }
+    QSize sz(imageData.cols/imgScale,imageData.rows/imgScale);
+    QImage im(imageData.data,imageData.cols,imageData.rows,imageData.step,QImage::Format_Indexed8);
+    ui->fullPic->resize(sz);
+    im.setColorTable(colorTable);
+    ui->fullPic->setPixmap(QPixmap::fromImage(im.scaled(sz)));
+
+    //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请点击左眼按钮再截取眼图!!!"));
+}
+
+void MainWindow::on_eyeLeft_clicked()
+{
+    is_eyeLeft = true;
+    is_eyeRight = false;
+
+    //设置按键使能
+    ui->currentSaveInfo->setEnabled(true);
+    ui->pupilCenterCalc->setEnabled(true);
+    ui->lightCenterCalc->setEnabled(true);
+    ui->irisCenterCalc->setEnabled(true);
+    ui->boxMethod->setEnabled(true);
+    ui->circleMethod->setEnabled(true);
+    ui->elipseMethod->setEnabled(true);
+
+    ui->boxZero->setEnabled(true);
+    ui->circleZero->setEnabled(true);
+    ui->elipseZero->setEnabled(true);
+}
+
+void MainWindow::on_eyeRight_clicked()
+{
+    is_eyeRight = true;
+    is_eyeLeft = false;
+
+    //设置按键使能
+    ui->currentSaveInfo->setEnabled(true);
+    ui->pupilCenterCalc->setEnabled(true);
+    ui->lightCenterCalc->setEnabled(true);
+    ui->irisCenterCalc->setEnabled(true);
+    ui->boxMethod->setEnabled(true);
+    ui->circleMethod->setEnabled(true);
+    ui->elipseMethod->setEnabled(true);
+
+    ui->boxZero->setEnabled(true);
+    ui->circleZero->setEnabled(true);
+    ui->elipseZero->setEnabled(true);
+}
+
+void MainWindow::on_pupilCenterCalc_clicked()
+{
+    //ui->lightCenterCalc->setEnabled(true);
+    //ui->irisCenterCalc->setEnabled(true);
+    if(eyeinfo!=nullptr){
+        //椭圆拟合对应瞳孔
+        RotatedRect rect;
+        if(elipseLabel!=nullptr){
+            rect.angle = elipseLabel->angle;
+            rect.size.width =sqrt((elipseLabel->rightUp.x()-elipseLabel->leftUp.x())*(elipseLabel->rightUp.x()-elipseLabel->leftUp.x())+
+                                   (elipseLabel->rightUp.y()-elipseLabel->leftUp.y())*(elipseLabel->rightUp.y()-elipseLabel->leftUp.y()))/mulriple;
+            rect.size.height = sqrt((elipseLabel->rightDown.x()-elipseLabel->rightUp.x())*(elipseLabel->rightDown.x()-elipseLabel->rightUp.x())+
+                                    (elipseLabel->rightDown.y()-elipseLabel->rightUp.y())*(elipseLabel->rightDown.y()-elipseLabel->rightUp.y()))/mulriple;
+            //qDebug()<<rect.size.width;
+            //rect.center=LpupilCenter;
+            qDebug()<<leftUP;
+    //        rect.center.x  = leftUP.x()*2 + (float)elipseLabel->rectCenter.x()/mulriple;
+    //        rect.center.y  = leftUP.y()*2 + (float)elipseLabel->rectCenter.y()/mulriple;
+            rect.center.x  = leftUP.x()*imgScale + (float)elipseLabel->rectCenter.x()/mulriple;
+            rect.center.y  = leftUP.y()*imgScale + (float)elipseLabel->rectCenter.y()/mulriple;
+
+        }
+        e = rect;
+
+        if(eyeinfo->is_elipse_method){
+            if(elipseLabel->rectCenter == QPoint(0,0)){
+                if(is_eyeLeft){
+                    LpupilCenter = Point2f(0,0);
+                }
+                if(is_eyeRight){
+                    RpupilCenter = Point2f(0,0);
+                }
+                return;
+            }
+    //        float x = leftUP.x()*2 + (float)elipseLabel->rectCenter.x()/mulriple;
+    //        float y = leftUP.y()*2 + (float)elipseLabel->rectCenter.y()/mulriple;
+            float x = leftUP.x()*imgScale + (float)elipseLabel->rectCenter.x()/mulriple;
+            float y = leftUP.y()*imgScale + (float)elipseLabel->rectCenter.y()/mulriple;
+            //****************************************保存的问题？？？
+            if(is_eyeLeft){
+                LpupilCenter = Point2f(x,y);
+            }
+            if(is_eyeRight){
+                RpupilCenter = Point2f(x,y);
+            }
+            eyeinfo->setHidden(false);
+            if(elipseLabel!=nullptr){
+                delete elipseLabel;
+            }
+        }
+
+        elipseLabel = nullptr;
+        /*******************************************测试
+        Mat temp;
+        originalImage.copyTo(temp);
+        rectangle(temp,Rect(x,y,2,2),Scalar(0,255,255),3);
+        imshow("ds",temp);
+        */
+        //显示eyeinfo,释放elipseLabel
+    }
+}
+
+void MainWindow::on_lightCenterCalc_clicked()
+{
+    //ui->pupilCenterCalc->setEnabled(true);
+    //ui->irisCenterCalc->setEnabled(true);
+
+    if(eyeinfo!=nullptr){
+        eyeinfo->is_draw = false;
+
+        if(eyeinfo->is_circle_method){
+            if(lightCenterCount==2){
+                if(QMessageBox::No == QMessageBox::question(this,QString::fromLocal8Bit("提示信息"),QString::fromLocal8Bit("是否重新保存两个光斑中心？"),QMessageBox::Yes | QMessageBox::No,QMessageBox::No)){
+                    return;
+                }else{
+                    lightCenterCount=0;
+                    if(is_eyeLeft && !is_eyeRight){
+                        LlightCenter1 = Point2f(0,0);
+                        LlightCenter2 = Point2f(0,0);
+                    }
+                    if(!is_eyeLeft && is_eyeRight){
+                        RlightCenter1 = Point2f(0,0);
+                        RlightCenter2 = Point2f(0,0);
+                    }
+                }
+            }
+            if(eyeinfo->leftUP==QPoint(0,0) && eyeinfo->rightDown==QPoint(0,0)){
+                if(is_eyeLeft && !is_eyeRight){
+                    if(lightCenterCount==0){
+                        LlightCenter1 = Point2f(0,0);
+                    }else{
+                        LlightCenter2 = Point2f(0,0);
+                    }
+                }
+                if(!is_eyeLeft && is_eyeRight){
+                    if(lightCenterCount==0){
+                        LlightCenter1 = Point2f(0,0);
+                    }else{
+                        LlightCenter2 = Point2f(0,0);
+                    }
+                }
+                return;
+            }
+    //        float x = leftUP.x()*2 + (float)eyeinfo->leftUP.x()/mulriple + ((float)eyeinfo->rightDown.x()/mulriple - (float)eyeinfo->leftUP.x()/mulriple)/2;
+    //        float y = leftUP.y()*2 + (float)eyeinfo->leftUP.y()/mulriple + ((float)eyeinfo->rightDown.y()/mulriple - (float)eyeinfo->leftUP.y()/mulriple)/2;
+            float x = leftUP.x()*imgScale + (float)eyeinfo->leftUP.x()/mulriple + ((float)eyeinfo->rightDown.x()/mulriple - (float)eyeinfo->leftUP.x()/mulriple)/2;
+            float y = leftUP.y()*imgScale + (float)eyeinfo->leftUP.y()/mulriple + ((float)eyeinfo->rightDown.y()/mulriple - (float)eyeinfo->leftUP.y()/mulriple)/2;
+            //lightCenters[lightCenterCount++] = Point2f(x,y);
+            if(is_eyeLeft ){
+                if(lightCenterCount==0){
+                    LlightCenter1 = Point2f(x,y);
+                }else{
+                    LlightCenter2 = Point2f(x,y);
+                }
+            }
+            if(is_eyeRight){
+                if(lightCenterCount==0){
+                    RlightCenter1 = Point2f(x,y);
+                }else{
+                    RlightCenter2 = Point2f(x,y);
+                }
+            }
+        }
+        ++lightCenterCount;
+
+        /*******************************************测试
+        Mat temp;
+        originalImage.copyTo(temp);
+        rectangle(temp,Rect(x,y,2,2),Scalar(0,255,255),3);
+        imshow("ds",temp);
+        */
+    }
+}
+
+void MainWindow::on_irisCenterCalc_clicked()
+{
+    //ui->pupilCenterCalc->setEnabled(true);
+    //ui->lightCenterCalc->setEnabled(true);
+
+    if(eyeinfo!=nullptr){
+        eyeinfo->is_draw = false;
+        if(eyeinfo->is_box_method){
+            if(eyeinfo->leftUP==QPoint(0,0) && eyeinfo->rightDown==QPoint(0,0)){
+                irisCenter = Point2f(0,0);
+                irisWidth = 0;
+                irisHeight = 0;
+                irisLeftUp = QPoint(0,0);
+                return;
+            }
+            irisWidth = (float)eyeinfo->rightDown.x()/mulriple - (float)eyeinfo->leftUP.x()/mulriple;
+            irisHeight = (float)eyeinfo->rightDown.y()/mulriple - (float)eyeinfo->leftUP.y()/mulriple;
+    //        float x = leftUP.x()*2 + (float)eyeinfo->leftUP.x()/mulriple + (float)irisWidth/2;
+    //        float y = leftUP.y()*2 + (float)eyeinfo->leftUP.y()/mulriple + (float)irisHeight/2;
+            float x = leftUP.x()*imgScale + (float)eyeinfo->leftUP.x()/mulriple + (float)irisWidth/2;
+            float y = leftUP.y()*imgScale + (float)eyeinfo->leftUP.y()/mulriple + (float)irisHeight/2;
+            irisCenter = Point2f(x,y);
+        }else{
+             QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请通过方框拟合计算虹膜中心!!!"));
+        }
+        //*********************************************************************************************
+    //    float x1 = leftUP.x()*2 + (float)eyeinfo->leftUP.x()/mulriple;
+    //    float y1 = leftUP.y()*2 + (float)eyeinfo->leftUP.y()/mulriple;
+        float x1 = leftUP.x()*imgScale + (float)eyeinfo->leftUP.x()/mulriple;
+        float y1 = leftUP.y()*imgScale + (float)eyeinfo->leftUP.y()/mulriple;
+        irisLeftUp = QPoint(x1,y1);
+        //qDebug()<< x1;
+        //qDebug()<<y1;
+        //************************************************************************kcf****************************************************************
+        if(is_eyeLeft){
+            if(track->reInitCount_left!=0){
+        //        if(QMessageBox::No == QMessageBox::question(this,QString::fromLocal8Bit("提示"),QString::fromLocal8Bit("是否重新选定左眼？"),QMessageBox::Yes | QMessageBox::No,QMessageBox::No)){
+        //            return;
+        //        }
+                track->reInitCount_left=0;
+                track->tracker_left = cv::TrackerKCF::create();
+            }
+            rect_left = Rect(irisLeftUp.x(),irisLeftUp.y(),irisWidth,irisHeight);
+            track->initTracker_left(irisLeftUp.x(),irisLeftUp.y(),irisWidth,irisHeight,originalImage);
+        }
+        if(is_eyeRight){
+            if(track->reInitCount_right!=0){
+        //        if(QMessageBox::No == QMessageBox::question(this,QString::fromLocal8Bit("提示"),QString::fromLocal8Bit("是否重新选定左眼？"),QMessageBox::Yes | QMessageBox::No,QMessageBox::No)){
+        //            return;
+        //        }
+                track->reInitCount_right=0;
+                track->tracker_right = cv::TrackerKCF::create();
+            }
+            rect_right = Rect(irisLeftUp.x(),irisLeftUp.y(),irisWidth,irisHeight);
+            track->initTracker_right(irisLeftUp.x(),irisLeftUp.y(),irisWidth,irisHeight,originalImage);
+        }
+
+    //    qDebug()<<irisWidth;
+    //    qDebug()<<irisHeight;
+        /*******************************************测试
+        Mat temp;
+        originalImage.copyTo(temp);
+        rectangle(temp,Rect(leftUP.x()*2 + eyeinfo->leftUP.x()/mulriple,leftUP.y()*2 + eyeinfo->leftUP.y()/mulriple,irisWidth,irisHeight),Scalar(0,255,255),3);
+        imshow("ds",temp);
+        */
+    }
+}
+
+void MainWindow::on_boxMethod_clicked()
+{
+    if(eyeinfo==nullptr){
+        QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请截取眼图!!!"));
+        //return;
+    }else{
+        //置零
+        eyeinfo->leftUP = QPoint(0,0);
+        eyeinfo->rightDown = QPoint(0,0);
+        eyeinfo->current = QPoint(0,0);
+
+        eyeinfo->is_box_method = true;
+        eyeinfo->is_circle_method = false;
+        eyeinfo->is_elipse_method = false;
+
+        eyeinfo->is_draw = true;
+
+        //方框拟合对应虹膜
+        //ui->pupilCenterCalc->setEnabled(false);
+        //ui->lightCenterCalc->setEnabled(false);
+
+        Mat mask;
+        localImage.copyTo(mask);
+        cv::resize(mask,mask,Size(mask.cols*mulriple,mask.rows*mulriple));
+        QImage im((uchar*)mask.data,mask.cols,mask.rows,mask.step,QImage::Format_Indexed8);
+        im.setColorTable(colorTable);
+        eyeinfo->setPixmap(QPixmap::fromImage(im));
+    }
+}
+
+void MainWindow::on_circleMethod_clicked()
+{
+    if(eyeinfo==nullptr){
+        QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请截取眼图!!!"));
+        //return;
+    }else{
+        //置零
+        eyeinfo->leftUP = QPoint(0,0);
+        eyeinfo->rightDown = QPoint(0,0);
+        eyeinfo->current = QPoint(0,0);
+
+        eyeinfo->is_box_method = false;
+        eyeinfo->is_circle_method = true;
+        eyeinfo->is_elipse_method = false;
+
+        eyeinfo->is_draw = true;
+
+        //圆拟合对应光斑
+        //ui->pupilCenterCalc->setEnabled(false);
+        //ui->irisCenterCalc->setEnabled(false);
+
+        Mat mask;
+        eyeinfo->eyeMask.copyTo(mask);
+        cv::resize(mask,mask,Size(mask.cols*mulriple,mask.rows*mulriple));
+        QImage im((uchar*)mask.data,mask.cols,mask.rows,mask.step,QImage::Format_Indexed8);
+        im.setColorTable(colorTable);
+        eyeinfo->setPixmap(QPixmap::fromImage(im));
+    }
+}
+
+void MainWindow::on_elipseMethod_clicked()
+{
+    if(eyeinfo==nullptr){
+        QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请截取眼图!!!"));
+        //return;
+    }else{
+        eyeinfo->is_box_method = false;
+        eyeinfo->is_circle_method = false;
+        eyeinfo->is_elipse_method = true;
+
+        //隐藏eyeinfo，显示eyeLabel,计算椭圆中心
+        eyeinfo->setHidden(true);
+
+        //在eyelabel中作为图片背景显示
+        elipseLabel = new eyeLabel();
+        Mat mask;
+        eyeinfo->eyeMask.copyTo(mask);
+        QImage im((uchar*)mask.data,mask.cols,mask.rows,mask.step,QImage::Format_Indexed8);
+        im.setColorTable(colorTable);
+        elipseLabel->setFixedSize(mask.cols,mask.rows);
+        elipseLabel->setPixmap(QPixmap::fromImage(im));
+        elipseLabel->show();
+    }
+
+    //ui->lightCenterCalc->setEnabled(false);
+    //ui->irisCenterCalc->setEnabled(false);
+
+}
+
+void MainWindow::on_currentSaveInfo_clicked()
+{
+//    if(!is_eyeLeft && !is_eyeRight){
+//        QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("求眼图信息前未点击左眼或右眼按钮，请点击左眼或右眼按钮，截取眼图!!!"));
+//        return;
+//    }
+
+    if(is_eyeLeft){
+
+        Mat mask;
+        originalImage.copyTo(mask);
+        rectangle(mask,Rect(LpupilCenter.x,LpupilCenter.y,2,2),Scalar(255,255,255),2);
+        rectangle(mask,Rect(LlightCenter1.x,LlightCenter1.y,2,2),Scalar(0,0,0),2);
+        rectangle(mask,Rect(LlightCenter2.x,LlightCenter2.y,2,2),Scalar(0,0,0),2);
+        rectangle(mask,Rect(irisCenter.x,irisCenter.y,2,2),Scalar(255,255,255),2);
+        rectangle(mask,Rect(irisCenter.x-irisWidth/2,irisCenter.y-irisHeight/2,irisWidth,irisHeight),Scalar(255,255,255),2);
+        //rectangle(mask,Rect(irisLeftUp.x(),irisLeftUp.y(),irisWidth,irisHeight),Scalar(255,255,255),1);
+
+
+        cv::ellipse(mask,e,Scalar(255,255,255),1);
+
+
+        //qDebug()<<elipseLabel->angle;
+        if(originalImage.cols>1500 || originalImage.rows>1000){
+           if(LpupilCenter!=Point2f(0,0)){
+               mask = mask(Rect(max((int)LpupilCenter.x-320,0),max((int)LpupilCenter.y-180,0),min(640,originalImage.cols-(int)LpupilCenter.x+320),min(360,originalImage.rows-(int)LpupilCenter.y+180)));
+           }
+        }
+        imshow("result",mask);
+        waitKey(0);
+    }
+    if(is_eyeRight){
+        Mat mask;
+        originalImage.copyTo(mask);
+        rectangle(mask,Rect(RpupilCenter.x,RpupilCenter.y,2,2),Scalar(255,255,255),2);
+        rectangle(mask,Rect(RlightCenter1.x,RlightCenter1.y,2,2),Scalar(0,0,0),2);
+        rectangle(mask,Rect(RlightCenter2.x,RlightCenter2.y,2,2),Scalar(0,0,0),2);
+        rectangle(mask,Rect(irisCenter.x,irisCenter.y,2,2),Scalar(255,255,255),2);
+        rectangle(mask,Rect(irisCenter.x-irisWidth/2,irisCenter.y-irisHeight/2,irisWidth,irisHeight),Scalar(255,255,255),2);
+        //rectangle(mask,Rect(irisLeftUp.x(),irisLeftUp.y(),irisWidth,irisHeight),Scalar(255,255,255),1);
+
+        cv::ellipse(mask,e,Scalar(255,255,255),1);
+
+        if(originalImage.cols>1500 || originalImage.rows>1000){
+           if(RpupilCenter!=Point2f(0,0)){
+               mask = mask(Rect(max((int)RpupilCenter.x-320,0),max((int)RpupilCenter.y-180,0),min(640,originalImage.cols-(int)RpupilCenter.x+320),min(360,originalImage.rows-(int)RpupilCenter.y+180)));
+           }
+        }
+        imshow("result",mask);
+        waitKey(0);
+    }
+
+//  QTime time;
+//  time.start();
+//qDebug()<<time.msecsSinceStartOfDay();
+//qDebug()<<"deswdw";
+//qDebug()<<time.msecsSinceStartOfDay();
+// qDebug()<<time.elapsed();
+//    int ttt=0;
+
+//    while(time.elapsed()<500){
+   //qDebug()<<time.msec();
+   // }
+//qDebug()<<time.elapsed();
+    if(QMessageBox::No == QMessageBox::question(this,QString::fromLocal8Bit("提示信息"),QString::fromLocal8Bit("是否保存了瞳孔中心、两个光斑中心、虹膜中心(长、宽)？"),QMessageBox::Yes | QMessageBox::No,QMessageBox::No)){
+        destroyWindow("result");
+        return;
+    }else{
+        destroyWindow("result");
+    }
+    //保存当前信息
+    int num=image_counter;
+    //string s;
+    if(left_right_info[0] == ""){
+        //left_right_info[0] += files[num];
+        left_right_info[0] += picName[num];
+    }
+
+    if(is_eyeLeft){
+        //瞳孔
+        left_right_info[1] += " " + to_string(LpupilCenter.x) + "," + to_string(LpupilCenter.y);
+        //光斑
+        left_right_info[1] += " " + to_string(LlightCenter1.x) + "," + to_string(LlightCenter1.y);
+        left_right_info[1] += " " + to_string(LlightCenter2.x) + "," + to_string(LlightCenter2.y);
+
+        //虹膜中心
+        left_right_info[1] += " " + to_string(irisCenter.x) + "," + to_string(irisCenter.y);
+        //虹膜长
+        left_right_info[1] += " " + to_string(irisWidth);
+        //虹膜宽
+        left_right_info[1] += " " + to_string(irisHeight);
+    }
+
+    if(is_eyeRight){
+        left_right_info[2] += " " + to_string(RpupilCenter.x) + "," + to_string(RpupilCenter.y);
+        //光斑
+        left_right_info[2] += " " + to_string(RlightCenter1.x) + "," + to_string(RlightCenter1.y);
+        left_right_info[2] += " " + to_string(RlightCenter2.x) + "," + to_string(RlightCenter2.y);
+
+        //虹膜中心
+        left_right_info[2] += " " + to_string(irisCenter.x) + "," + to_string(irisCenter.y);
+        //虹膜长
+        left_right_info[2] += " " + to_string(irisWidth);
+        //虹膜宽
+        left_right_info[2] += " " + to_string(irisHeight);
+    }
+
+    infos[num] = left_right_info[0]+left_right_info[1]+left_right_info[2];
+
+    //坐标置零
+    leftUP = QPoint(0,0);
+    real_Time_pos = QPoint(0,0);
+    rightDown = QPoint(0,0);
+
+    //保存信息清零
+    //lightCenters.clear();  //两个光斑中心
+    //lightCenters.push_back(Point2f(0,0));
+    //lightCenters.push_back(Point2f(0,0));
+    irisCenter = Point2f(0,0);   //虹膜中心
+    irisWidth = 0;      //虹膜宽
+    irisHeight = 0;     //虹膜高
+
+    if(eyeinfo!=nullptr){
+        delete eyeinfo;
+        eyeinfo = nullptr;
+    }
+    //按键使能
+    if(is_eyeLeft){
+        lightCenterCount = 0;
+        //ui->eyeLeft->setEnabled(false);
+        //ui->eyeRight->setEnabled(true);
+
+        ui->currentSaveInfo->setEnabled(false);
+        ui->irisCenterCalc->setEnabled(false);
+        ui->lightCenterCalc->setEnabled(false);
+        ui->pupilCenterCalc->setEnabled(false);
+        ui->boxMethod->setEnabled(false);
+        ui->circleMethod->setEnabled(false);
+        ui->elipseMethod->setEnabled(false);
+
+        ui->boxZero->setEnabled(false);
+        ui->circleZero->setEnabled(false);
+        ui->elipseZero->setEnabled(false);
+
+        //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请点击右眼按钮再截取眼图!!!"));
+    }
+    if(is_eyeRight){
+        lightCenterCount = 0;
+        //ui->eyeRight->setEnabled(false);
+        //ui->nextImage->setEnabled(true);
+
+        ui->currentSaveInfo->setEnabled(false);
+        ui->irisCenterCalc->setEnabled(false);
+        ui->lightCenterCalc->setEnabled(false);
+        ui->pupilCenterCalc->setEnabled(false);
+        ui->boxMethod->setEnabled(false);
+        ui->circleMethod->setEnabled(false);
+        ui->elipseMethod->setEnabled(false);
+
+        ui->boxZero->setEnabled(false);
+        ui->circleZero->setEnabled(false);
+        ui->elipseZero->setEnabled(false);
+    }
+
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+//    if(QMessageBox::Yes == QMessageBox::question(this,QString::fromLocal8Bit("关闭提示"),QString::fromLocal8Bit("是否点击了“全部保存”按钮，保存了所有瞳孔中心点信息？"),QMessageBox::Yes | QMessageBox::No,QMessageBox::No)){
+//        event->accept();
+//    }else{
+//        event->ignore();
+//    }
+    if(saveProgress==0 && image_counter!=0){
+        //**********************************************************改
+//        for(;saveProgress<=maxProgress;++saveProgress){
+//            out<<infos[saveProgress];
+//            out<<endl;
+//        }
+        out.seekp(0,ios::beg);
+        for(int i=0;i<=maxProgress;++i){
+            out<<infos[i];
+            out<<endl;
+        }
+    }
+}
+
+void MainWindow::on_jumpPic_returnPressed()
+{
+    ui->jumpPic->setPlaceholderText(QString::fromLocal8Bit("跳页"));
+
+    image_counter = (ui->jumpPic->text()).toInt();
+    if(maxProgress<image_counter)
+        maxProgress=image_counter;
+    //qDebug()<<image_counter;
+    imageData = imread(files[image_counter],0);
+    imageData.copyTo(originalImage);
+
+    for(int i=0;i<3;++i){
+        left_right_info[i]="";
+    }
+    //ui->nextImage->setEnabled(false);
+    //ui->eyeRight->setEnabled(false);
+    ui->currentSaveInfo->setEnabled(false);
+    ui->irisCenterCalc->setEnabled(false);
+    ui->lightCenterCalc->setEnabled(false);
+    ui->pupilCenterCalc->setEnabled(false);
+    ui->boxMethod->setEnabled(false);
+    ui->circleMethod->setEnabled(false);
+    ui->elipseMethod->setEnabled(false);
+
+    //信息清零
+    leftUP = QPoint(0,0);
+    rightDown = QPoint(0,0);
+    real_Time_pos = QPoint(0,0);
+    pupilCenters.clear();
+    lightCenters.clear();
+    LpupilCenter = Point2f(0,0);
+    LlightCenter1 = Point2f(0,0);
+    LlightCenter2 = Point2f(0,0);
+
+    RpupilCenter = Point2f(0,0);
+    RlightCenter1 = Point2f(0,0);
+    RlightCenter2 = Point2f(0,0);
+
+    irisCenter = Point2f(0,0);   //虹膜中心
+    irisWidth = 0;      //虹膜宽
+    irisHeight = 0;     //虹膜高
+
+    imgScale = 1;
+    while(imageData.cols/imgScale>640 || imageData.rows/imgScale>360){
+        ++imgScale;
+    }
+    //显示
+    QSize sz(imageData.cols/imgScale,imageData.rows/imgScale);
+    QImage im(imageData.data,imageData.cols,imageData.rows,imageData.step,QImage::Format_Indexed8);
+    ui->fullPic->resize(sz);
+    im.setColorTable(colorTable);
+    ui->fullPic->setPixmap(QPixmap::fromImage(im.scaled(sz)));
+
+    //QMessageBox::warning(this,QString::fromLocal8Bit("警告"),QString::fromLocal8Bit("请点击左眼按钮再截取眼图!!!"));
+
+    QString s=QString(tr("NO %1 pic")).arg(image_counter);
+    showINFO(s);
+
+    //qDebug()<<"{fede}";
+}
+
+void MainWindow::on_boxZero_clicked()
+{
+    irisCenter = Point2f(0,0);
+    irisWidth = 0;
+    irisHeight = 0;
+//    if(is_eyeLeft){
+//        track->tracker_left = nullptr;
+//        track->reInitCount_left = 0;
+//        rect_left = Rect(0,0,0,0);
+//    }
+//    if(is_eyeRight){
+//        track->tracker_right = nullptr;
+//        track->reInitCount_right = 0;
+//        rect_right = Rect(0,0,0,0);
+//    }
+}
+
+void MainWindow::on_circleZero_clicked()
+{
+    if(is_eyeLeft){
+        LlightCenter1 = Point2f(0,0);
+        LlightCenter2 = Point2f(0,0);
+    }
+    if(is_eyeRight){
+        RlightCenter1 = Point2f(0,0);
+        RlightCenter2 = Point2f(0,0);
+    }
+}
+
+void MainWindow::on_elipseZero_clicked()
+{
+    if(is_eyeLeft){
+        LpupilCenter = Point2f(0,0);
+    }
+    if(is_eyeRight){
+        RpupilCenter = Point2f(0,0);
+    }
+    e = RotatedRect(Point2f(0,0),Size2f(0,0),0);
+}

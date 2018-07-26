@@ -1,0 +1,21 @@
+#include "algorithmshow.h"
+#include "ui_algorithmshow.h"
+
+algorithmShow::algorithmShow(QWidget *parent) :
+    QLabel(parent),
+    ui(new Ui::algorithmShow)
+{
+    ui->setupUi(this);
+    timer=new QTimer(this);
+    connect(timer,SIGNAL(timeout()),this,SLOT(update()));
+}
+
+algorithmShow::~algorithmShow()
+{
+    delete ui;
+}
+
+void algorithmShow::paintEvent(QPaintEvent *event)
+{
+    QLabel::paintEvent(event);//先调用父类的paintEvent为了显示'背景'!!!
+}

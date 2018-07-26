@@ -1,0 +1,41 @@
+#ifndef EYEMOTIONAI_H
+#define EYEMOTIONAI_H
+
+#include <iostream>
+#include <opencv2/opencv.hpp>
+#include <opencv2/dnn.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/highgui.hpp>
+
+using namespace std;
+using namespace cv;
+using namespace cv::dnn;
+
+
+class eyeMotionAI
+{
+public:
+     eyeMotionAI();
+    ~eyeMotionAI();
+public:
+     vector<Point2f> findRoughBorderWithTF_recent(Mat &srcw, Mat &srcb, char *savepath);
+     vector<Point2f> yu_match(Mat &src,Mat &srw,int x_step,int y_step,int method);
+
+
+     int findReality(Mat &srcb, vector<Point2f> &save, char *savepath,vector<Point2f> &pupilCenters,vector<Point2f> &lightCenters);
+     int findReality2(Mat &roi_copy,Point2f &pupilCenters,vector<Point2f> &lightCenters,RotatedRect &e);
+
+     Mat classify(Mat &img);
+
+     void allProcess(Mat &src_w, Mat &src_b,vector<Point2f> &pupilCenters,vector<Point2f> &lightCenters);
+
+private:
+     String modelFile = "model_1227pm.pb";
+     cv::dnn::Net net ;
+     cv::HOGDescriptor hog;
+     Ptr<cv::ml::SVM> svm;
+
+
+};
+
+#endif // EYEMOTIONAI_H

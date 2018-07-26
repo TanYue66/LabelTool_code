@@ -1,0 +1,70 @@
+#ifndef EYELABEL_H
+#define EYELABEL_H
+
+#include <QWidget>
+#include <QLabel>
+#include <QMouseEvent>
+#include <QKeyEvent>
+#include <QToolTip>
+#include <QPoint>
+#include <opencv2/opencv.hpp>
+#include <QPainter>
+#include <QPainterPath>
+#include <QTimer>
+#include <QPixmap>
+#include <qmath.h>
+#include <QDebug>
+
+namespace Ui {
+class eyeLabel;
+}
+
+class eyeLabel : public QLabel
+{
+    Q_OBJECT
+
+public:
+
+    //QPixmap eyeplic;
+
+    QPoint rectCenter = QPoint(0,0);
+    QPoint leftUp;
+    QPoint leftDown;
+    QPoint rightUp;
+    QPoint rightDown;
+    int angle = 0;
+
+    explicit eyeLabel(QWidget *parent = 0);
+    ~eyeLabel();
+
+private slots:
+    void mousePressEvent(QMouseEvent *event);
+
+    void mouseReleaseEvent(QMouseEvent *event);
+
+    void mouseMoveEvent(QMouseEvent *event);
+
+    void keyPressEvent(QKeyEvent *event);
+
+    void paintEvent(QPaintEvent *event);
+
+private:
+    Ui::eyeLabel *ui;
+
+    QTimer *tt;
+
+    QPoint upCenter;
+    QPoint current;
+    QPoint translate;
+    QPoint scale;
+
+    int rectWidth;
+    int rectHeight;
+    bool is_draw = true;
+    bool is_finish = false;
+    bool is_translate = false;
+    double rate = 0.0;
+    bool is_first = true;
+};
+
+#endif // EYELABEL_H

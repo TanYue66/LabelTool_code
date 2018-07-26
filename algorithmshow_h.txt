@@ -1,0 +1,32 @@
+#ifndef ALGORITHMSHOW_H
+#define ALGORITHMSHOW_H
+
+#include <QWidget>
+#include <QLabel>
+#include <QPainter>
+#include <QTimer>
+
+namespace Ui {
+class algorithmShow;
+}
+
+class algorithmShow : public QLabel
+{
+    Q_OBJECT
+
+public:
+    //bool is_draw = false;
+
+public:
+    explicit algorithmShow(QWidget *parent = 0);
+    ~algorithmShow();
+
+protected:
+    void paintEvent(QPaintEvent *event);
+
+private:
+    Ui::algorithmShow *ui;
+    QTimer *timer;
+};
+
+#endif // ALGORITHMSHOW_H

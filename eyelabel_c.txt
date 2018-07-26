@@ -1,0 +1,182 @@
+#include "eyelabel.h"
+#include "ui_eyelabel.h"
+
+eyeLabel::eyeLabel(QWidget *parent) :
+    QLabel(parent),
+    ui(new Ui::eyeLabel)
+{
+    ui->setupUi(this);
+    tt = new QTimer(this);
+    connect(tt,SIGNAL(timeout()),this,SLOT(update()));
+    tt->start(20);
+
+}
+
+eyeLabel::~eyeLabel()
+{
+
+    delete ui;
+}
+
+void eyeLabel::mousePressEvent(QMouseEvent *event)
+{
+    if(is_draw){
+        leftUp = QPoint(event->x(),event->y());
+    }
+    else{
+        QPoint p(event->x(),event->y());
+        if(QRect(rectCenter.x()-10,rectCenter.y()-10,20,20).contains(p)){
+            is_translate=true;
+        }
+        //QToolTip::showText(p,QString::fromLocal8Bit("请在瞳孔中心求解后(点击完瞳孔中心拟合)，按Enter重新绘制椭圆，计算光斑中心"),this);
+    }
+    //qDebug()<<event->x();
+    //qDebug()<<event->y();
+    //qDebug()<<rectCenter.x() << " "<<rectCenter.y();
+}
+
+void eyeLabel::mouseReleaseEvent(QMouseEvent *event)
+{
+    if(is_draw){
+        rightDown = current;
+        is_draw=false;
+        is_finish=true;
+    }else{
+        is_translate=false;
+        QPoint p(event->x(),event->y());
+        if(QRect(upCenter.x()-10,upCenter.y()-10,20,20).contains(p)){
+            leftUp = QPoint(leftUp.x()*cos(angle)+leftUp.y()*sin(angle),leftUp.x()*(-sin(angle))+leftUp.y()*cos(angle));
+            rightUp = QPoint(rightUp.x()*cos(angle)+rightUp.y()*sin(angle),rightUp.x()*(-sin(angle))+rightUp.y()*cos(angle));
+            leftDown = QPoint(leftDown.x()*cos(angle)+leftDown.y()*sin(angle),leftDown.x()*(-sin(angle))+leftDown.y()*cos(angle));
+            rightDown = QPoint(rightDown.x()*cos(angle)+rightDown.y()*sin(angle),rightDown.x()*(-sin(angle))+rightDown.y()*cos(angle));
+            current = rightDown;
+        }
+    }
+}
+
+void eyeLabel::mouseMoveEvent(QMouseEvent *event)
+{
+    if(is_draw){
+        //current = ui->label->mapFromGlobal(event->globalPos());
+        current = QPoint(event->x(),event->y());
+    }else{
+        //QPoint p(ui->label->mapFromGlobal(event->globalPos()));
+        QPoint p(event->x(),event->y());
+        if(is_translate){
+            translate = p;
+        }
+    }
+}
+
+void eyeLabel::keyPressEvent(QKeyEvent *event)
+{
+    switch (event->key()) {
+    case Qt::Key_1:
+        this->hide();
+        break;
+    case Qt::Key_2:
+        this->show();
+        break;
+    case Qt::Key_W:
+        rectHeight += 1;
+        break;
+    case Qt::Key_S:
+        rectHeight -= 1;
+        break;
+    case Qt::Key_A:
+        rectWidth -= 1;
+        break;
+    case Qt::Key_D:
+        rectWidth += 1;
+        break;
+    case Qt::Key_Z:
+        angle-=1;
+        break;
+    case Qt::Key_X:
+        angle+=1;
+        break;
+    case Qt::Key_Return:
+    case Qt::Key_Enter:
+        leftUp=QPoint(0,0);
+        current=QPoint(0,0);
+        rightDown=QPoint(0,0);
+        rectWidth=0;
+        rectHeight=0;
+        angle=0;
+        is_draw = true;
+        is_finish=false;
+        is_first=true;
+        break;
+    default:
+        break;
+    }
+}
+
+void eyeLabel::paintEvent(QPaintEvent *event)
+{
+    QLabel::paintEvent(event);//先调用父类的paintEvent为了显示'背景'!!!
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true); //设置反走样
+    //设置画笔颜色
+    //painter.setPen(Qt::red);
+
+    //painter.drawRect(30,30,50,50);
+
+    //ui->label->setPixmap(eyeplic);
+
+    if(is_draw){
+        rightUp = QPoint(current.x(),leftUp.y());
+        leftDown = QPoint(leftUp.x(),current.y());
+        rectCenter = QPoint((leftUp.x()+rightDown.x())/2,(leftUp.y()+rightDown.y())/2);
+        rectWidth=current.x()-leftUp.x();
+        rectHeight=current.y()-leftUp.y();
+        painter.drawRect(leftUp.x(),leftUp.y(),rectWidth,rectHeight);
+        QPainterPath myPath;
+        myPath.addEllipse(leftUp.x(),leftUp.y(),rectWidth,rectHeight);
+        painter.drawPath(myPath);
+    }else{
+        if(is_translate){
+            //leftUp = translate;
+            leftUp = QPoint(leftUp.x()+translate.x()-rectCenter.x(),leftUp.y()+translate.y()-rectCenter.y());
+            upCenter = translate;
+            rectWidth = current.x()-leftDown.x();
+            rectHeight = current.y()-rightUp.y();
+        }
+        if(is_first){
+            is_first=false;
+            rectWidth=current.x()-leftUp.x();
+            rectHeight=current.y()-leftUp.y();
+        }
+        painter.translate(rectCenter.x(),rectCenter.y());
+        painter.rotate(angle);
+        painter.translate(-rectCenter.x(),-rectCenter.y());
+
+        rightUp = QPoint(leftUp.x()+rectWidth,leftUp.y());
+        leftDown = QPoint(leftUp.x(),leftUp.y()+rectHeight);
+        rightDown = QPoint(leftUp.x()+rectWidth,leftUp.y()+rectHeight);
+        current = rightDown;
+        rectCenter = QPoint((leftUp.x()+rightDown.x())/2,(leftUp.y()+rightDown.y())/2);
+        //qDebug()<<rectCenter.x()<<" "<<rectCenter.y();
+        //qDebug()<<leftUp.x()<<" "<<leftUp.y();
+
+        painter.drawRect(leftUp.x(),leftUp.y(),rectWidth,rectHeight);
+        painter.setPen(Qt::red);
+        painter.drawRect(rectCenter.x(),rectCenter.y(),3,3);
+        painter.setPen(Qt::black);
+        QPainterPath myPath;
+        myPath.addEllipse(leftUp.x(),leftUp.y(),rectWidth,rectHeight);
+        painter.drawPath(myPath);
+    }
+
+    if(is_finish){
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true); //设置反走样
+        painter.setPen(QColor(255, 255, 255));
+        //在矩形上方直线的中点画旋转符
+        upCenter = QPoint(leftUp.x()+(rightUp.x()-leftUp.x())/2,leftUp.y());
+        QRectF r1(rectCenter.x()-10,rectCenter.y(),20,10);
+        painter.drawRect(rectCenter.x()-10,rectCenter.y()-10,20,20);
+        //painter.drawText(r1,QString("平移"));
+    }
+}
+

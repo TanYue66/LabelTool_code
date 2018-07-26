@@ -1,0 +1,51 @@
+#ifndef LOCEYEINFO_H
+#define LOCEYEINFO_H
+
+#include <QWidget>
+#include <QLabel>
+#include <QPainter>
+#include <QMouseEvent>
+#include <opencv2/opencv.hpp>
+#include <QTimer>
+
+using namespace cv;
+
+namespace Ui {
+class locEyeInfo;
+}
+
+class locEyeInfo : public QLabel
+{
+    Q_OBJECT
+
+public:
+
+    Mat eyeMask;
+    bool is_draw = false;
+    bool is_box_method=false;
+    bool is_circle_method=false;
+    bool is_elipse_method=false;
+
+    QPoint leftUP;
+    QPoint rightDown;
+    QPoint current;
+
+
+public:
+    explicit locEyeInfo(QWidget *parent = 0);
+    ~locEyeInfo();
+
+protected:
+    void mousePressEvent(QMouseEvent *event);
+    void mouseMoveEvent(QMouseEvent *event);
+    void mouseReleaseEvent(QMouseEvent *event);
+    void keyPressEvent(QKeyEvent *event);
+    void paintEvent(QPaintEvent *event);
+
+private:
+    Ui::locEyeInfo *ui;
+    QTimer *tt;
+    QVector<QRgb>  colorTable;
+};
+
+#endif // LOCEYEINFO_H
